@@ -1,0 +1,24 @@
+{
+  "name": "toplota",
+  "version": "0.0.1",
+  "description": "Lgatec heaing syste",
+  "main": "index.js",
+  "scripts": {
+    "test": "test",
+    "start": "node --harmony index",
+    "sensors": "node --harmony sensors-test"
+  },
+  "keywords": [
+    "HVAC",
+    "ds18b20",
+    "Raspberry",
+    "Home",
+    "automation"
+  ],
+  "author": "Peter Keše",
+  "license": "ISC",
+  "dependencies": {
+    "pi-watchdog": "0.0.1",
+    "wiring-pi": "^2.1.0"
+  }
+}
