@@ -1,0 +1,166 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Toplota</title>
+  <meta name="viewport" content="width=320px, initial-scale=1.1">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-with-addons.min.js"></script>
+  <!--script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-with-addons.js"></script-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-dom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+  <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
+  <style>
+    body{
+      background-color: #000;
+      color: #ddd;
+    }
+    .configPanel{
+      padding: 0 0 0 5px;
+      float:left;
+      width: 200px;
+    }
+    .configPanel{
+      list-style-type:none;
+    }
+    .configPanel li{
+    }
+    .configPanel li>div{
+      float:left;
+      clear:both;
+      height: 2em;
+      width: 30px;
+      padding: 0 10px 0 0px;
+      font-size: 2em;
+      text-align:right;
+    }
+    .configPanel li>div>input[type=checkbox]{
+      margin-left:40px;
+      width:30px;
+      height:30px;
+      xpadding:10px;
+    }
+    .configPanel li>p{
+      float: left;
+      padding: 0 10px 0 10px;
+      margin-top: 0;
+      margin-left:40px;
+    }
+    .tempUpDown{
+      float:left;
+      width:6em;
+      border: 1px solid #444;
+      border-radius: 5px;
+      text-align: center;
+      margin-top:5px;
+    }
+    .tempUpDown>div{
+      font-size: 2em;
+      clear: both;
+      padding: 10px;
+    }
+    .status{
+      clear:both;
+      padding-left:2px;
+    }
+    .status>div{
+      display: inline-block;
+      width:70px;
+      padding:7px 0 7px 0;
+      border: 1px solid #444;
+      text-align: center;
+      margin-right:-1px;
+    }
+    .status>div.active{
+      background-color: #444;
+      border-color: #888;
+      color: #fff;
+      margin-right:0;
+    }
+    .temps{
+      clear: both;
+      padding-top: 40px;
+    }
+    .temps td{
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"/>
+  <script type='text/babel'>
+    let TempsList = ({temps}) => {
+      let renderTemp = (t, data) => (<tr><th>{t}</th><td>{data.t.toFixed(2)}&deg;C</td><td>{(60*data.d).toFixed(2)}</td></tr>);
+      let htmls = [];
+      for (var t in temps)
+        htmls.push(renderTemp(t, temps[t]));
+      return <table className="temps"><tbody>{htmls}</tbody></table>
+    };
+    let App = React.createClass({
+      getInitialState() {return {
+        temps: {},
+        state: {active:false},
+        container: 0,
+      }},
+      componentDidMount() {
+        let socket = io('', {reconnectionDelayMax:5000000});
+        console.log('io',socket);
+        this.setState({socket:socket});
+        socket.on('data', data => {
+          this.setState(data);
+          //console.log(data);
+          this.setState({active: data.state.active});
+        });
+      },
+      powerSwitch() {
+        let active = !this.state.active
+        this.setState({active: active});
+        this.state.socket.emit('active', active)
+      },
+      tempUpDown(delta) {
+        this.state.state.target_temp += delta;
+        this.state.socket.emit('temp', this.state.state.target_temp);
+        this.setState(this.state);
+      },
+      tempUp() { this.tempUpDown(+0.5) },
+      tempDown() { this.tempUpDown(-0.5) },
+      render() {
+        //console.log(this.state);
+        let container = '';
+        if (this.state.temps.cont1) container = this.state.temps.cont1.t.toFixed(0) + '/' + this.state.temps.cont2.t.toFixed(0) + '/' + this.state.temps.cont3.t.toFixed(0) + '/' + this.state.temps.cont4.t.toFixed(0);
+        return (
+          <div className={this.state.active ? 'active' : 'inactive'}>
+            <ul className='configPanel'>
+              <li>
+                <div>
+                <input type="checkbox" checked={this.state.active} onClick={this.powerSwitch}/>
+                </div>
+                <p>Vklop<br/>ogrevanja</p>
+              </li>
+              <li>
+                <div className="currTemp">{this.state.temps.L1_estimate ? this.state.temps.L1_estimate.t.toFixed(1) : '?'}&deg;</div>
+                <p>Trenutna<br/>temperatura </p>
+              </li>
+              <li>
+                <div className="contPercent">{this.state.container.toFixed(0)}%</div>
+                <p>Zalogovnik<br/><small>{container?container:'??'}&deg;C</small></p>
+              </li>
+            </ul>
+            <div className='tempUpDown'>
+              <div><a onClick={this.tempUp}>+</a></div>
+              <div>{this.state.state.target_temp}&deg;</div>
+              <div><a onClick={this.tempDown}>-</a></div>
+            </div>
+            <div className='status'>
+              Ogrevanje: &nbsp;
+              <div className={'L1 '+(this.state.state.heatL1?'active':'inactive')}>pritličje</div>
+              <div className={'L0 '+(this.state.state.heatL0?'active':'inactive')}>klet</div>
+              <div className={'boiler '+(this.state.state.heatBoiler?'active':'inactive')}>bojler</div>
+            </div>
+            <TempsList temps={this.state.temps} />
+          </div>
+        );
+      }
+    });
+    ReactDOM.render(<App/>, document.getElementById('app'));
+  </script>
+</body>

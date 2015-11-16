@@ -75,6 +75,10 @@ var sensors = {
 
 // add additional detected but undefined sensors to the list
 var other_sensors = ds18b20.sensors(function(err, ids) {
+  if (err) {
+    console.error('unable to detect temperature sensors');
+    return;
+  }
   for (var id of ids) {
     if (!known_sensors.hasOwnProperty(id)) sensors[id] = Sensor(id);
    }
