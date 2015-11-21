@@ -12,10 +12,11 @@ var Sensor = function(id) {
     delta: 0,
   }
   var updated = null;
+  var prev_readout = null;
 
   result.update = function() {
     return new Promise(function(resolve, reject) {
-      ds18b20.temperature(id, function(err, _temp) {
+      function process_readout(err, _temp) {
         //console.log("temp callback",id, err, _temp);
         /*
         if (err) {
@@ -26,14 +27,20 @@ var Sensor = function(id) {
           resolve(_temp);
         } 
         */
+        var valid = (prev_readout===null) || Math.abs(prev_readout-_temp)<2.0;
+        prev_readout = _temp;
         if (err) {
           result.err = err;
+        } else if (!valid) {
+          // weird readout... go and repeat
+          ds18b20.temperature(id, process_readout);
+          return;
         } else {
           // calculate delta temperature
-          var now = new Date();
-          if (updated !== null) {
+          var now = Date.now();
+          if (updated !== null && updated != now) {
             var dt = now - updated;
-            var delta = (_temp - result.temp) / (now - updated) * 1000;
+            var delta = (_temp - result.temp) / dt * 1000;
             result.delta = (result.delta / 2) + delta;
           }
           updated = now;
@@ -41,7 +48,8 @@ var Sensor = function(id) {
           result.temp = _temp;
         }  
         resolve(_temp);
-      });
+      };
+      ds18b20.temperature(id, process_readout);
     });
   }
   known_sensors[id] = result;

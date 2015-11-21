@@ -17,7 +17,7 @@ module.exports = {
   pass: "something"
 }
 */
-var auth_credentials = require('secret-credentials.js')
+var auth_credentials = require('./secret-credentials.js')
 
 // Object.extend (aka assign) polyfill for Node 0.12
 Object.defineProperty(Object.prototype, "extend", {
@@ -41,28 +41,22 @@ app.get('/', function(req, res){
     res.setHeader('WWW-Authenticate', 'Basic realm="example"')
     res.end('Access denied')
   } else {
-    res.sendfile('index.html');
+    res.sendFile('index.html', {root: __dirname});
   }
-});
-
-app.get('/app.jsx', function(req, res){
-  res.sendfile('client.js');
 });
 
 io.on('connection', function (socket) {
   if (data) socket.emit('data', data);
-  socket.on('active', function (active) {
-    console.log('io.active', active);
-    state.active = active;
-    controller.decide();
-    controller.refresh();
-  });
-  socket.on('temp', function (temp) {
-    console.log('io.temp', temp);
-    state.target_temp = temp;
-    controller.decide();
-    controller.refresh();
-  });
+  let setHandler = propname => {
+    socket.on(propname, value => {
+      console.log("socket.io:", propname, "=", value);
+      state[propname] = value;
+      controller.decide();
+      controller.refresh();
+    });
+  }
+  ['L0active','L1active','L0target_temp','L1target_temp'].forEach(setHandler);
+
   socket.on('rf-temp', function(data) {
     //console.log('got rf:', data)
     if (!data.channel || typeof data.temp != 'number')

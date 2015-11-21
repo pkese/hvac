@@ -14,36 +14,46 @@
       background-color: #000;
       color: #ddd;
     }
+    .panel{
+      float: left;
+      /*margin-right: 20px;*/
+    }
+    .panel h2{
+      padding-top:0.5em;
+      text-align: center;
+    }
     .configPanel{
       padding: 0 0 0 5px;
       float:left;
-      width: 200px;
+      width: 178px;
     }
-    .configPanel{
+    .panel ul{
       list-style-type:none;
     }
-    .configPanel li{
+    .panel li{
     }
-    .configPanel li>div{
+    .panel li>div{
       float:left;
-      clear:both;
-      height: 2em;
-      width: 30px;
-      padding: 0 10px 0 0px;
-      font-size: 2em;
+      clear:left;
+      height: 1.8em;
+      width: 24px;
+      padding: 0 8px 0 0px;
+      font-size: 1.8em;
       text-align:right;
     }
-    .configPanel li>div>input[type=checkbox]{
+    .panel li>div>input[type=checkbox]{
       margin-left:40px;
-      width:30px;
-      height:30px;
+      width:24px;
+      height:24px;
       xpadding:10px;
     }
-    .configPanel li>p{
+    .panel li>p{
+      font-size: 0.9em;
       float: left;
       padding: 0 10px 0 10px;
       margin-top: 0;
       margin-left:40px;
+      margin-right:-10px;
     }
     .tempUpDown{
       float:left;
@@ -56,16 +66,16 @@
     .tempUpDown>div{
       font-size: 2em;
       clear: both;
-      padding: 10px;
+      padding: .2em;
     }
     .status{
-      clear:both;
-      padding-left:2px;
+      padding-left:1px;
+      font-size:0.9em;
     }
     .status>div{
       display: inline-block;
-      width:70px;
-      padding:7px 0 7px 0;
+      width:65px;
+      padding:5px 0 5px 0;
       border: 1px solid #444;
       text-align: center;
       margin-right:-1px;
@@ -87,7 +97,7 @@
 </head>
 <body>
   <div id="app"/>
-  <script type='text/babel'>
+  <script type='text/babel'>    
     let TempsList = ({temps}) => {
       let renderTemp = (t, data) => (<tr><th>{t}</th><td>{data.t.toFixed(2)}&deg;C</td><td>{(60*data.d).toFixed(2)}</td></tr>);
       let htmls = [];
@@ -95,10 +105,40 @@
         htmls.push(renderTemp(t, temps[t]));
       return <table className="temps"><tbody>{htmls}</tbody></table>
     };
+    let Floor = ({level /*L0 L1 L2*/ , label, active, temp, rh, target_temp, activate, tempUpDown}) => {
+      return (
+        <div className={"panel floor " + (active ? 'active' : 'inactive')}>
+          <h2>{label}</h2>
+          <ul className='configPanel'>
+            <li>
+              <div>
+              <input type="checkbox" checked={active} onClick={()=>activate(level)}/>
+              </div>
+              <p>Vklop<br/>ogrevanja</p>
+            </li>
+            <li>
+              <div className="currTemp">{temp ? temp.toFixed(1) : '?'}&deg;</div>
+              <p>Trenutna<br/>temperatura </p>
+            </li>
+            <li>
+              <div className="currRh">{rh ? rh.toFixed(0) : '?'}%</div>
+              <p>Relativna<br/>vlažnost</p>
+            </li>
+          </ul>
+          <div className='tempUpDown'>
+            <div><a onClick={()=>tempUpDown(level, +.5)}>+</a></div>
+            <div>{target_temp ? target_temp : '?'}&deg;</div>
+            <div><a onClick={()=>tempUpDown(level, -.5)}>-</a></div>
+          </div>
+        </div>
+      );
+    }
     let App = React.createClass({
       getInitialState() {return {
+        // socket
         temps: {},
-        state: {active:false},
+        L0active:false, L1active:false,
+        heatL0: false, heatL1: false, heatBoiler: false,
         container: 0,
       }},
       componentDidMount() {
@@ -108,54 +148,79 @@
         socket.on('data', data => {
           this.setState(data);
           //console.log(data);
-          this.setState({active: data.state.active});
+          var newState = data.state;  // copy everything from data.state to root level,
+          newState.temps = data.temps;  // leave 'temps' as separate structure
+          this.setState(newState);
         });
       },
-      powerSwitch() {
-        let active = !this.state.active
-        this.setState({active: active});
-        this.state.socket.emit('active', active)
+      powerSwitch(level) {
+        let id = level + 'active' 
+        let active = !this.state[id];
+        let newState = {};
+        newState[id] = active;
+        this.setState(newState);
+        this.state.socket.emit(id,active)
       },
-      tempUpDown(delta) {
-        this.state.state.target_temp += delta;
-        this.state.socket.emit('temp', this.state.state.target_temp);
-        this.setState(this.state);
+      tempUpDown(level, delta) {
+        let id = level + 'target_temp';
+        let value = this.state[id] + delta;
+        console.log("+-", id, delta, value);
+        this.state.socket.emit(id, value);
+        let newState = {};
+        newState[id] = value;
+        this.setState(newState);
       },
-      tempUp() { this.tempUpDown(+0.5) },
-      tempDown() { this.tempUpDown(-0.5) },
       render() {
         //console.log(this.state);
         let container = '';
         if (this.state.temps.cont1) container = this.state.temps.cont1.t.toFixed(0) + '/' + this.state.temps.cont2.t.toFixed(0) + '/' + this.state.temps.cont3.t.toFixed(0) + '/' + this.state.temps.cont4.t.toFixed(0);
         return (
-          <div className={this.state.active ? 'active' : 'inactive'}>
-            <ul className='configPanel'>
-              <li>
-                <div>
-                <input type="checkbox" checked={this.state.active} onClick={this.powerSwitch}/>
-                </div>
-                <p>Vklop<br/>ogrevanja</p>
-              </li>
-              <li>
-                <div className="currTemp">{this.state.temps.L1_estimate ? this.state.temps.L1_estimate.t.toFixed(1) : '?'}&deg;</div>
-                <p>Trenutna<br/>temperatura </p>
-              </li>
-              <li>
-                <div className="contPercent">{this.state.container.toFixed(0)}%</div>
-                <p>Zalogovnik<br/><small>{container?container:'??'}&deg;C</small></p>
-              </li>
-            </ul>
-            <div className='tempUpDown'>
-              <div><a onClick={this.tempUp}>+</a></div>
-              <div>{this.state.state.target_temp}&deg;</div>
-              <div><a onClick={this.tempDown}>-</a></div>
-            </div>
-            <div className='status'>
+          <div>
+            <div className='panel'>
+              <h2 style={{marginTop:0}}>Stanje</h2>
+              <ul>
+                <li>
+                  <div style={{width:40}}>{this.state.container.toFixed(1)}<small>%</small></div>
+                  <p style={{marginRight:0}}>Zalogovnik<br/><small>{container?container:'??'}&deg;C</small></p>
+                </li>
+              </ul>
+            </div>  
+
+            <div className='status panel'>
               Ogrevanje: &nbsp;
-              <div className={'L1 '+(this.state.state.heatL1?'active':'inactive')}>pritličje</div>
-              <div className={'L0 '+(this.state.state.heatL0?'active':'inactive')}>klet</div>
-              <div className={'boiler '+(this.state.state.heatBoiler?'active':'inactive')}>bojler</div>
+              <div className={'L1 '+(this.state.heatL1?'active':'inactive')}>pritličje</div>
+              <div className={'L0 '+(this.state.heatL0?'active':'inactive')}>klet</div>
+              <div className={'boiler '+(this.state.heatBoiler?'active':'inactive')}>bojler</div>
             </div>
+
+            
+            <div style={{clear:'both'}}>&nbsp;</div>
+            <hr/>
+            
+            <Floor 
+              level="L1"
+              label="Pritličje"
+              active={this.state.L1active}
+              temp={this.state.L1report ? this.state.L1report.temp : this.state.L1temp_estimate}
+              rh={this.state.L1report ? this.state.L1report.rh : undefined}
+              target_temp={this.state.L1target_temp}
+              activate={this.powerSwitch}
+              tempUpDown={this.tempUpDown}              
+            />
+            
+            <Floor 
+              level="L0"
+              label="Klet"
+              active={this.state.L0active}
+              temp={this.state.L0report ? this.state.L0report.temp : 0}
+              rh={this.state.L0report ? this.state.L0report.rh : undefined}
+              target_temp={this.state.L0target_temp}
+              activate={this.powerSwitch}
+              tempUpDown={this.tempUpDown}              
+            />
+            
+            <hr style={{clear:'both'}}/>
+            
             <TempsList temps={this.state.temps} />
           </div>
         );

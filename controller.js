@@ -53,7 +53,8 @@ var checkManualMode = function() {
 
 var system_poweroff = function() {
   relays._signal_all(1);
-  state.active = false;
+  state.L0active = false;
+  state.L1active = false;
   refresh();
   lcd.off();
   lcdPromise = lcdPromise.then(function() {
@@ -76,7 +77,7 @@ button(15, function(delta) {
       if (checkManualMode() && wpi.digitalRead(15) == 0) system_poweroff();
     }, 400);
   } else {
-    state.active = !state.active;
+    state.L1active = !state.L1active;
     refresh();
   }
 })
@@ -84,14 +85,14 @@ button(15, function(delta) {
 // up
 button(1, function(delta) {
     //console.log('up');
-    state.target_temp += 0.5;
+    state.L1target_temp += 0.5;
     refresh();
 })
 
 // down
 button(5, function(delta) {
     //console.log('down');
-    state.target_temp -= 0.5;
+    state.L1target_temp -= 0.5;
     refresh();
 })
 
@@ -142,7 +143,7 @@ function testLCD() {
 
 function getContainerPercent() {
   let contsum = sensors.cont1.temp + sensors.cont2.temp + sensors.cont3.temp + sensors.cont4.temp;
-  let percent = (contsum-88)/(285-88)*100;
+  let percent = (contsum-88)/(288-88)*100;
   if (percent < 0) percent = 0;
   return percent;
 }
@@ -175,8 +176,8 @@ refresh = function() {
         return lcd.print("   ROCNO DELOVANJE     ");
       } else {
         var s = "Nacin: ";
-        if (state.active) {
-          s += "gretje "+state.target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C ";
+        if (state.L1active) {
+          s += "gretje "+state.L1target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C ";
         } else {
           s += "neaktivno     "
         }
@@ -229,11 +230,11 @@ function Heating(pump, mixerValve, out, ret, hot) {
   var result = {}
   result.levelOut = function() {
     var levelTurnHot = function() {
-      console.log('levelOut post-turn');
+      //console.log('levelOut post-turn');
       pump.off();
       mixerValve.turn(1);
       levelTimeout = null;
-      if (hot.temp > 30 || ret.temp > state.target_temp+2) {
+      if (hot.temp > 30 || ret.temp > state.L1target_temp+2) {
         var wakeupTimeoutHrs;
         if (hot.temp > 60) wakeupTimeoutHrs = 0.5;
         else if (hot.temp > 50) wakeupTimeoutHrs = 1;
@@ -243,14 +244,14 @@ function Heating(pump, mixerValve, out, ret, hot) {
       }
     }
     var levelLevelOut = function() {
-      console.log('levelOut level');
+      //console.log('levelOut level');
       pump.on(); levelTimeout = setTimeout(levelTurnHot, 4*60*1000);
     }
     // turn cold & set timeout
     result.levelCancel();
     mixerValve.turn(-1);
     levelTimeout = setTimeout(levelLevelOut, 3.65*60*1000);
-    console.log('levelOut pre-turn');
+    //console.log('levelOut pre-turn');
   },
   result.levelCancel = function() {
     if (levelTimeout) {
@@ -262,26 +263,26 @@ function Heating(pump, mixerValve, out, ret, hot) {
       levelCronTimeout = null;
     }
   }
-  result.set = function(heat) {
+  result.set = function(heat, temp_delta) {
     heat = !!heat; // boolean
 
     if (heat) {
-      var proj_temp = out.temp + out.delta * 15 + ret.delta * 15 + hot.delta * 15;
-      var req_temp = 32.5 + (32.5-ret.temp);
-      if (proj_temp > req_temp+3) mixerValve.turn(-1)
-      else if (proj_temp < req_temp-3) mixerValve.turn(1);
+      var proj_temp = out.temp + out.delta * 25 + ret.delta * 15 + hot.delta * 15;
+      var req_temp = 33 + (temp_delta*5) + (33-ret.temp);
+      //console.log(proj_temp, req_temp, temp_delta, out.temp, ret.temp, hot.temp);
+      if (proj_temp > req_temp+2.5) mixerValve.turn(-1)
+      else if (proj_temp < req_temp-2.5) mixerValve.turn(1);
       else mixerValve.turn(0);
     }
 
-    if (current==heat) // break on no-change
-      return;
-
-    current = heat;
-    if (heat) {
-      pump.on();
-      result.levelCancel();
-    } else {
-      result.levelOut();
+    if (current!=heat) {// break on no-change
+      current = heat;
+      if (heat) {
+        pump.on();
+        result.levelCancel();
+      } else {
+        result.levelOut();
+      }
     }
   }
   result.busy = function() {return current || levelTimeout}
@@ -318,9 +319,9 @@ var L1TempEstimator = (function() {
 })();
 
 function decide() {
-  var target = state.active ? state.target_temp : 4.0; // 4 deg when not active (defrost)
+  var target = state.L1active ? state.L1target_temp : 4.0; // 4 deg when not active (defrost)
   var supply = Math.max(sensors.hot.temp, sensors.cont1.temp-1);
-  var overheat = (sensors.stove.temp > 76 || sensors.cont1.temp > 81) && (sensors.cold.temp > 68);
+  var overheat = (sensors.stove.temp > 77 && sensors.cold.temp > 72);
   state.overheat = overheat;
 
   // B o i l e r
@@ -348,31 +349,45 @@ function decide() {
   }
 
   // L e v e l - 0
-  if (overheat) {
-    state.heatL0 = sensors.L0_ret.temp < 60 || sensors.L0_pump.temp < 60
-    relays.L0_pump.set(heatL0);
+  var _L0supply = supply + (state.heatL0 ? +0.11 : -0.11);
+  if (overheat || state.L0active && _L0supply > state.L0target_temp + 10) {
+    var heating = state.heatL0; 
+    // do we have report
+    if (state.L0report && state.L0report.temp && (Date.now() - state.L1report.updated < 15*60*1000)) {
+      var L0temp = state.L0report.temp;
+      var L0target = state.L0target_temp;
+      state.heatL0 = heating ? L0temp<L0target+0.1 : L0temp<L0target;
+    } else {
+      state.heatL0 = false;
+    }
+    if (overheat) {
+      state.heatL0 |= sensors.L0_ret.temp < 60 || sensors.L0_pump.temp < 60
+    }
+    relays.L0_pump.set(state.heatL0);
   } else {
     relays.L0_pump.off();
     state.heatL0 = false;
   }
 
   // L e v e l - 1
-  if (supply > target+2 || supply > sensors.L1_floor.temp + 2 || sensors.stove.temp > 55 || overheat) {
+  var _L1supply = supply + (state.heatL1 ? +0.11 : -0.11);
+  if (_L1supply > sensors.L1_floor.temp+2 || sensors.stove.temp > 55 || overheat) {
 
     var t_room = L1TempEstimator.get();
 
-    if (t_room < target || overheat) {
-      if (!relays.L1_pump.get()) console.log('L1 on', target, t_room, sensors.L1_floor.temp)
-      L1Heating.set(1);
+    if (t_room < target || (state.heatL1 && t_room < target+0.1) || overheat) {
+      //if (!relays.L1_pump.get()) console.log('L1 on', target, t_room, sensors.L1_floor.temp)
+      var t_delta = overheat ? 2 : (target-t_room);
+      L1Heating.set(1, t_delta);
       state.heatL1 = true;
-    } else if (t_room > target+0.5) {
+    } else {
       //if (relays.L1_pump.get()) console.log('L1 off', target, t_room, sensors.L1_floor.temp)
-      L1Heating.set(0);
+      L1Heating.set(0, 0);
       state.heatL1 = false;
     }
   } else {
   // off mode or cold water
-    L1Heating.set(0);
+    L1Heating.set(0, 0);
     state.heatL1 = false;
   }
 }

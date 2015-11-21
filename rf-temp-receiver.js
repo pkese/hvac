@@ -50,20 +50,23 @@ module.exports = function(callback) {
       if (cur>1500) return acc+'1';
       return acc+'0';
     }, '');
+    //console.log(s);
 
-  /* parse received data
-  data:    11 00010110 01 000011111101 1111 00101111 xxxx
-  what:    sy addr     ch temp         xxxx humid    padding
-  length:  2  10       2  12           4    8
-  offset:  0  2        10 12           24   28       36
-  */
+    /* parse received data
+    data:    1100010110 01 000011111101 1111 00101111 xxxx
+    what:    addr       ch temp         xxxx humid    padding
+    length:  10         2  12           4    8
+    offset:  0          10 12           24   28       36
+    */
     var rx = s.split('\n')
     // remove leading zeros if transmit is too long: each transmit starts with two consecutive ones
     //.map(function(s) {console.log('a',s); return s})
+    /*
     .map(function(s) {
       while (s.length>36 && (s[0]!='1' || s[1]!='1')) s = s.substring(1);
       return s
     })
+    */
     // need at least 38 (or 42 with 'trailing') bits
     .filter(function(s) {return s.length>=36})
     // truncate longer strings
@@ -79,13 +82,13 @@ module.exports = function(callback) {
       return acc
     }, [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]) //es6: Array(36).fill(0)
     //.map(function(s) {console.log(''+s); return s})
-    // turn back into a string of ones and zeros, make sure at least 3 values agree
+    // turn back into a string of ones and zeros
     // put spaces into appropritate places
     .reduce(function(acc, bit, idx) {
-      if (idx==2 || idx==10 || idx==12 || idx==24 || idx==28) acc += ' '
-      if (bit>=2) return acc+'1'
-      if (bit<=-2) return acc+'0'
-      return acc+'?'
+      if (idx==10 || idx==12 || idx==24 || idx==28) acc += ' ';
+      if (Math.abs(bit)<3) return acc+'?'; // make sure at least 3 values agree
+      if (bit>0) return acc+'1'
+      if (bit<0) return acc+'0'
     }, '')
     //console.log('received', rx, new Date())
 
@@ -101,12 +104,11 @@ module.exports = function(callback) {
         return acc;
       }
       switch (idx) {
-        case 0: /* sentinel */ break;
-        case 1: acc.addr = val; break;
-        case 2: acc.channel = val+1; break;
-        case 3: acc.temp = val/10.0; break;
-        case 4: /* sentinel */ break;
-        case 5: acc.rh = val; break;
+        case 0: acc.addr = val; break;
+        case 1: acc.channel = val+1; break;
+        case 2: acc.temp = val/10.0; break;
+        case 3: /* sentinel */ break;
+        case 4: acc.rh = val; break;
       }
       return acc;
     }, {valid:true})

@@ -7,6 +7,8 @@
     "test": "test",
     "start": "node --harmony index",
     "rf": "node --harmony rf-temp-daemon",
+    "rf-test": "nice -n -5 node --harmony rf-test",
+    "net-weather": "node --harmony net-weather",
     "sensors": "node --harmony sensors-test"
   },
   "keywords": [
@@ -27,6 +29,7 @@
     "onoff": "^1.0.3",
     "socket.io": "^1.3.7",
     "socket.io-client": "^1.3.7",
+    "superagent": "^1.4.0",
     "wiring-pi": "^2.1.0"
   }
 }
