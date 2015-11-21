@@ -34,14 +34,37 @@ Object.defineProperty(Object.prototype, "extend", {
 
 var data = null;
 
+var crypto = require('crypto')
+var Cookies = require('cookies');
+var cookieAuth = function(req, res) {
+  var cookies = Cookies(req, res);
+  var auth = cookies.get('auth');
+  // calculate SHA1 of ua + password string
+  var sha = crypto.createHash('sha1');
+  sha.update(req.headers['user-agent']);
+  sha.update(auth_credentials.name + auth_credentials.pass);
+  var authstr = sha.digest('hex');
+  //console.log('cookie', auth, authstr, req.headers['user-agent']);
+  return {
+    authorized: function() {return auth == authstr;},
+    authorize: function() {cookies.set('auth',authstr, {maxAge: 9007199254740991});}
+  };
+}
+
 app.get('/', function(req, res){
-  var credentials = auth(req)
-  if (!credentials || credentials.name !== auth_credentials.name || credentials.pass !== auth_credentials.pass) {
+  var cookies = cookieAuth(req,res);
+  var authorized = cookies.authorized();
+  if (!authorized) {
+    var credentials = auth(req)
+    authorized = (credentials && credentials.name === auth_credentials.name && credentials.pass === auth_credentials.pass);
+    cookies.authorize();
+  }
+  if (authorized) {
+    res.sendFile('index.html', {root: __dirname});
+  } else {
     res.statusCode = 401
     res.setHeader('WWW-Authenticate', 'Basic realm="example"')
     res.end('Access denied')
-  } else {
-    res.sendFile('index.html', {root: __dirname});
   }
 });
 
