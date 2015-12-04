@@ -4,11 +4,6 @@
   <meta charset="UTF-8" />
   <title>Toplota</title>
   <meta name="viewport" content="width=320px, initial-scale=1.1">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-with-addons.min.js"></script>
-  <!--script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-with-addons.js"></script-->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.1/react-dom.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
-  <script src="https://cdn.socket.io/socket.io-1.2.0.js"></script>
   <style>
     body{
       background-color: #000;
@@ -97,7 +92,12 @@
 </head>
 <body>
   <div id="app"/>
-  <script type='text/babel'>    
+  <script src="//cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-with-addons.min.js"></script>
+  <!--script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-with-addons.js"></script-->
+  <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-dom.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.7/socket.io.min.js"></script>
+  <script type='text/babel'>
     let TempsList = ({temps}) => {
       let renderTemp = (t, data) => (<tr><th>{t}</th><td>{data.t.toFixed(2)}&deg;C</td><td>{(60*data.d).toFixed(2)}</td></tr>);
       let htmls = [];
@@ -154,7 +154,7 @@
         });
       },
       powerSwitch(level) {
-        let id = level + 'active' 
+        let id = level + 'active'
         let active = !this.state[id];
         let newState = {};
         newState[id] = active;
@@ -184,7 +184,7 @@
                   <p style={{marginRight:0}}>Zalogovnik<br/><small>{container?container:'??'}&deg;C</small></p>
                 </li>
               </ul>
-            </div>  
+            </div>
 
             <div className='status panel'>
               Ogrevanje: &nbsp;
@@ -193,11 +193,11 @@
               <div className={'boiler '+(this.state.heatBoiler?'active':'inactive')}>bojler</div>
             </div>
 
-            
+
             <div style={{clear:'both'}}>&nbsp;</div>
             <hr/>
-            
-            <Floor 
+
+            <Floor
               level="L1"
               label="Pritličje"
               active={this.state.L1active}
@@ -205,10 +205,10 @@
               rh={this.state.L1report ? this.state.L1report.rh : undefined}
               target_temp={this.state.L1target_temp}
               activate={this.powerSwitch}
-              tempUpDown={this.tempUpDown}              
+              tempUpDown={this.tempUpDown}
             />
-            
-            <Floor 
+
+            <Floor
               level="L0"
               label="Klet"
               active={this.state.L0active}
@@ -216,11 +216,11 @@
               rh={this.state.L0report ? this.state.L0report.rh : undefined}
               target_temp={this.state.L0target_temp}
               activate={this.powerSwitch}
-              tempUpDown={this.tempUpDown}              
+              tempUpDown={this.tempUpDown}
             />
-            
+
             <hr style={{clear:'both'}}/>
-            
+
             <TempsList temps={this.state.temps} />
           </div>
         );

@@ -268,7 +268,7 @@ function Heating(pump, mixerValve, out, ret, hot) {
 
     if (heat) {
       var proj_temp = out.temp + out.delta * 25 + ret.delta * 15 + hot.delta * 15;
-      var req_temp = 33 + (temp_delta*5) + (33-ret.temp);
+      var req_temp = 33 + (temp_delta*10) + (33-ret.temp)*5;
       //console.log(proj_temp, req_temp, temp_delta, out.temp, ret.temp, hot.temp);
       if (proj_temp > req_temp+2.5) mixerValve.turn(-1)
       else if (proj_temp < req_temp-2.5) mixerValve.turn(1);
@@ -351,7 +351,7 @@ function decide() {
   // L e v e l - 0
   var _L0supply = supply + (state.heatL0 ? +0.11 : -0.11);
   if (overheat || state.L0active && _L0supply > state.L0target_temp + 10) {
-    var heating = state.heatL0; 
+    var heating = state.heatL0;
     // do we have report
     if (state.L0report && state.L0report.temp && (Date.now() - state.L1report.updated < 15*60*1000)) {
       var L0temp = state.L0report.temp;
@@ -371,7 +371,7 @@ function decide() {
 
   // L e v e l - 1
   var _L1supply = supply + (state.heatL1 ? +0.11 : -0.11);
-  if (_L1supply > sensors.L1_floor.temp+2 || sensors.stove.temp > 55 || overheat) {
+  if (_L1supply > sensors.L1_floor.temp+1 || sensors.stove.temp > 55 || overheat) {
 
     var t_room = L1TempEstimator.get();
 
