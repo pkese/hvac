@@ -51,7 +51,7 @@ var checkManualMode = function() {
   return (wpi.digitalRead(16)==0);
 }
 
-var system_poweroff = function() {
+var signal_poweroff = function() {
   relays._signal_all(1);
   state.L0active = false;
   state.L1active = false;
@@ -61,7 +61,7 @@ var system_poweroff = function() {
     return lcd.home();
   }).then(function() {
     require('child_process').spawn('/sbin/poweroff');
-
+ 
     // disable radio receiver LED
     wpi.setValue(6, wpi.HIGH);
     wpi.pinMode(6, wpi.OUTPUT);
@@ -71,11 +71,14 @@ var system_poweroff = function() {
 }
 // modeswitch
 button(15, function(delta) {
-  if (checkManualMode()) {
-    // debounce then POWEROFF
+  if (wpi.digitalRead(1)==0) { // modeswith + up
+    // debounce then switch off diaplay
+    signal_poweroff();
+  } else if (wpi.digitalRead(5)==0) { // modeswitch + down
+    // debounce then switch off display
     setTimeout(function() {
-      if (checkManualMode() && wpi.digitalRead(15) == 0) system_poweroff();
-    }, 400);
+      if (wpi.digitalRead(5)==0 && wpi.digitalRead(15)==0) signal_poweroff();
+    }, 300);
   } else {
     state.L1active = !state.L1active;
     refresh();
@@ -228,7 +231,7 @@ function Heating(pump, mixerValve, out, ret, hot) {
   var levelFunc = function() {
   }
   var result = {}
-  result.levelOut = function() {
+  result.levelOut = function(full) {
     var levelTurnHot = function() {
       //console.log('levelOut post-turn');
       pump.off();
@@ -247,11 +250,18 @@ function Heating(pump, mixerValve, out, ret, hot) {
       //console.log('levelOut level');
       pump.on(); levelTimeout = setTimeout(levelTurnHot, 4*60*1000);
     }
-    // turn cold & set timeout
+    
     result.levelCancel();
-    mixerValve.turn(-1);
-    levelTimeout = setTimeout(levelLevelOut, 3.65*60*1000);
-    //console.log('levelOut pre-turn');
+    if (full) {
+      // turn cold & set timeout
+      mixerValve.turn(-1);
+      levelTimeout = setTimeout(levelLevelOut, 3.65*60*1000);
+      //console.log('levelOut pre-turn');
+    } else {
+      // just turn on
+      pump.off();
+      levelTurnHot()  
+    }
   },
   result.levelCancel = function() {
     if (levelTimeout) {
@@ -281,12 +291,13 @@ function Heating(pump, mixerValve, out, ret, hot) {
         pump.on();
         result.levelCancel();
       } else {
-        result.levelOut();
+        result.levelOut(hot > 26);
       }
     }
   }
   result.busy = function() {return current || levelTimeout}
-  levelCronTimeout = setTimeout(result.levelOut, 15*60*1000);
+  // level out 15 minutes after system start
+  levelCronTimeout = setTimeout(function() {result.levelOut(hot>26);}, 15*60*1000);
   return result;
 }
 var L1Heating = Heating(relays.L1_pump, mixerValve, sensors.L1_pump, sensors.L1_ret, sensors.hot);
