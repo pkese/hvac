@@ -14,7 +14,7 @@ Off: `[Temp down]` + `[Mode switch]`
 
 #### System & config
 
-Local IP address: 192.168.1.254, ports 80, 22  
+Local IP address: 192.168.1.254, ports 80, 22  (on the outside :2222)
 journalctl -p
 
 
@@ -22,6 +22,8 @@ journalctl -p
 
 fstrim -v /  
 
+
+btrfs fi usage /var
 
 btrfs fi show /dev/sda2  
 btrfs fi df /var  

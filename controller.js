@@ -154,6 +154,7 @@ function getContainerPercent() {
 refresh = function() {
     //console.log('refresh');
     netUpdate()
+    let L1_temp = L1TempEstimator.get()
     lcdPromise = lcdPromise.then(function() {
       return lcd.home();
     }).then(function() {
@@ -161,7 +162,7 @@ refresh = function() {
       let percent = getContainerPercent();
       let s = '';
       //s += sensors.aux.temp.toFixed(1);
-      s += L1TempEstimator.get().toFixed(1);
+      s += L1_temp.toFixed(1);
       s += ' ' + sensors.cont1.temp.toFixed(0);
       s += '/' + ((sensors.cont2.temp + sensors.cont3.temp)/2.0).toFixed(0);
       s += '/' + sensors.cont4.temp.toFixed(0);
@@ -179,8 +180,10 @@ refresh = function() {
         return lcd.print("   ROCNO DELOVANJE     ");
       } else {
         var s = "Nacin: ";
-        if (state.L1active) {
-          s += "gretje "+state.L1target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C ";
+        if (state.L1active && L1_temp > state.L1target_temp && sensors.L1_floor.temp > sensors.L1_pump.temp) {
+          s += "hlajenje "+state.L1target_temp.toFixed(1);
+        } else if (state.L1active) {
+          s += "gretje "+state.L1target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C";
         } else {
           s += "neaktivno     "
         }
@@ -382,9 +385,8 @@ function decide() {
 
   // L e v e l - 1
   var _L1supply = supply + (state.heatL1 ? +0.11 : -0.11);
+  var t_room = L1TempEstimator.get();
   if (_L1supply > sensors.L1_floor.temp+1 || sensors.stove.temp > 55 || overheat) {
-
-    var t_room = L1TempEstimator.get();
 
     if (t_room < target || (state.heatL1 && t_room < target+0.1) || overheat) {
       //if (!relays.L1_pump.get()) console.log('L1 on', target, t_room, sensors.L1_floor.temp)
@@ -393,6 +395,20 @@ function decide() {
       state.heatL1 = true;
     } else {
       //if (relays.L1_pump.get()) console.log('L1 off', target, t_room, sensors.L1_floor.temp)
+      L1Heating.set(0, 0);
+      state.heatL1 = false;
+    }
+  } else if (supply < sensors.L1_floor.temp
+            && state.L1active
+            && state.L1target_temp < t_room
+            )
+  {
+    // cooling
+    var delta = state.heatL1 ? +1.0 : 1.1;
+    if (sensors.L1_pump.temp+delta < sensors.L1_floor.temp) {
+      L1Heating.set(1, 0);
+      state.heatL1 = true;
+    } else {
       L1Heating.set(0, 0);
       state.heatL1 = false;
     }

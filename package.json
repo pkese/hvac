@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "test",
-    "start": "node --harmony index",
-    "rf": "node --harmony rf-temp-daemon",
+    "start": "node --harmony --max-old-space-size=384 index",
+    "rf": "node --harmony --max-old-space-size=192 rf-temp-daemon",
     "rf-test": "nice -n -5 node --harmony rf-test",
-    "net-weather": "node --harmony net-weather",
+    "net-weather": "node --harmony --max-old-space-size=128 net-weather",
     "sensors": "node --harmony sensors-test"
   },
   "keywords": [
