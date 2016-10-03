@@ -235,6 +235,7 @@ function Heating(pump, mixerValve, out, ret, hot) {
   }
   var result = {}
   result.levelOut = function(full) {
+    if (typeof full !== 'boolean') full=true;
     var levelTurnHot = function() {
       //console.log('levelOut post-turn');
       pump.off();
@@ -294,7 +295,7 @@ function Heating(pump, mixerValve, out, ret, hot) {
         pump.on();
         result.levelCancel();
       } else {
-        result.levelOut(hot > 26);
+        result.levelOut(hot.temp > 26);
       }
     }
   }
