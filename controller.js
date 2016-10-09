@@ -224,22 +224,17 @@ function MixerValve(up_relay, down_relay) {
   return result;
 }
 var mixerValve = MixerValve(relays.mixer_up, relays.mixer_down);
-if (!checkManualMode()) mixerValve.turn(1);
+if (!checkManualMode()) mixerValve.turn(-1);
 
 function Heating(pump, mixerValve, out, ret, hot) {
   var current = false;
   var levelTimeout = null;
   var levelCmd = ''; // down / level / up
   var levelCronTimeout = null;
-  var levelFunc = function() {
-  }
-  var result = {}
-  result.levelOut = function(full) {
-    if (typeof full !== 'boolean') full=true;
-    var levelTurnHot = function() {
-      //console.log('levelOut post-turn');
+  var result  = {}
+  result.levelOut = function() {
+    var levelComplete = function() {
       pump.off();
-      mixerValve.turn(1);
       levelTimeout = null;
       if (hot.temp > 30 || ret.temp > state.L1target_temp+2) {
         var wakeupTimeoutHrs;
@@ -251,21 +246,17 @@ function Heating(pump, mixerValve, out, ret, hot) {
       }
     }
     var levelLevelOut = function() {
-      //console.log('levelOut level');
-      pump.on(); levelTimeout = setTimeout(levelTurnHot, 4*60*1000);
+      // console.log('levelOut level');
+      // keep turning cold (just in case) & set timeout
+      mixerValve.turn(-1);
+      pump.on();
+      levelTimeout = setTimeout(levelComplete, 4*60*1000);
     }
     
     result.levelCancel();
-    if (full) {
-      // turn cold & set timeout
-      mixerValve.turn(-1);
-      levelTimeout = setTimeout(levelLevelOut, 3.65*60*1000);
-      //console.log('levelOut pre-turn');
-    } else {
-      // just turn on
-      pump.off();
-      levelTurnHot()  
-    }
+
+    levelLevelOut();
+    //console.log('levelOut pre-turn');
   },
   result.levelCancel = function() {
     if (levelTimeout) {
@@ -283,10 +274,13 @@ function Heating(pump, mixerValve, out, ret, hot) {
     if (heat) {
       var proj_temp = out.temp + out.delta * 25 + ret.delta * 15 + hot.delta * 15;
       var req_temp = 33 + (temp_delta*10) + (33-ret.temp)*5;
+      if (req_temp > 42) req_temp = 42;	
       //console.log(proj_temp, req_temp, temp_delta, out.temp, ret.temp, hot.temp);
-      if (proj_temp > req_temp+2.5) mixerValve.turn(-1)
-      else if (proj_temp < req_temp-2.5) mixerValve.turn(1);
-      else mixerValve.turn(0);
+      var mixerDir;	
+      if (proj_temp > req_temp+2.5) mixerDir = -1; // cold
+      else if (proj_temp < req_temp-2.5) mixerDir = 1; // hot
+      else mixerDir = 0;
+      mixerValve.turn(mixerDir);	
     }
 
     if (current!=heat) {// break on no-change
@@ -295,13 +289,13 @@ function Heating(pump, mixerValve, out, ret, hot) {
         pump.on();
         result.levelCancel();
       } else {
-        result.levelOut(hot.temp > 26);
+        result.levelOut();
       }
     }
   }
   result.busy = function() {return current || levelTimeout}
-  // level out 15 minutes after system start
-  levelCronTimeout = setTimeout(function() {result.levelOut(hot>26);}, 15*60*1000);
+  // level out right after system start
+  levelCronTimeout = setTimeout(function() {result.levelOut();}, 5*1000);
   return result;
 }
 var L1Heating = Heating(relays.L1_pump, mixerValve, sensors.L1_pump, sensors.L1_ret, sensors.hot);
