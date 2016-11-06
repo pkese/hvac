@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Toplota</title>
-  <meta name="viewport" content="width=320px, initial-scale=1.1">
+  <meta name="viewport" content="width=320, initial-scale=1.1">
   <style>
     body{
       background-color: #000;
@@ -92,7 +92,7 @@
 </head>
 <body>
   <div id="app"/>
-  <script src="//cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.34/browser.min.js"></script>
   <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-with-addons.min.js"></script>
   <!--script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-with-addons.js"></script-->
   <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.14.3/react-dom.min.js"></script>
@@ -141,28 +141,35 @@
         heatL0: false, heatL1: false, heatBoiler: false,
         container: 0,
       }},
+      onUpstreamState(data) {
+        if (data===null) return;
+        //console.log(data);
+        this.setState(data);
+        var newState = data.state;  // copy everything from data.state to root level,
+        newState.temps = data.temps;  // leave 'temps' as separate structure
+        this.setState(newState);
+      },
+      fetchState(socket) {
+        socket.emit('state::find', {}, (err,state) => {
+          //console.log('state::find');
+          if (!err) this.onUpstreamState(state);
+          else (console.log('state::find error',err));
+        });
+      },
       componentDidMount() {
         let socket = io('/', {reconnectionDelayMax:5000000});
         console.log('io',socket);
         this.setState({socket:socket});
-        socket.on('connect',function() {
+        socket.on('connect', () => {
           console.log('connect',arguments);
+          this.setState({connected:true});
+          this.fetchState(socket);
         });
         socket.on('disconnect',function() {
           console.log('disconnect',arguments);
+          this.setState({connected:false});
         });
-        socket.emit('state::find', {}, (err,state) => {
-          if (!err) this.setState(state);
-          else (console.log('state::find error',err));
-        });
-        //socket.on('data', data => {
-        socket.on('state created', data => {
-          this.setState(data);
-          //console.log(data);
-          var newState = data.state;  // copy everything from data.state to root level,
-          newState.temps = data.temps;  // leave 'temps' as separate structure
-          this.setState(newState);
-        });
+        socket.on('state created', this.onUpstreamState);
       },
       powerSwitch(level) {
         let id = level + 'active'
