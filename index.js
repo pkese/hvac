@@ -1,7 +1,11 @@
 "use strict"
 
+if (typeof Promise === 'undefined') Promise = require('bluebird');
+
 var feathers = require('feathers');
-var socketio = require('feathers-socketio')
+var rest = require('feathers-rest');
+var hooks = require('feathers-hooks');
+var socketio = require('feathers-socketio');
 
 var state = require('./state');
 
@@ -11,6 +15,10 @@ var controller = require('./controller')
 var auth = require('basic-auth');
 
 var app = feathers()
+  .configure(rest())
+  .configure(hooks())
+  .configure(socketio())
+
 
 /*
 credentials file should contain:
@@ -70,9 +78,8 @@ app.get('/', function(req, res){
   }
 });
 
-app.configure(socketio(function(io) {
+function init_realtime_handler(io) {
   io.on('connection', function (socket) {
-    if (data) socket.emit('data', data);
     let setHandler = propname => {
       socket.on(propname, value => {
         console.log("socket.io:", propname, "=", value);
@@ -96,19 +103,30 @@ app.configure(socketio(function(io) {
       //controller.refresh();
     });
   });
-  
-  // dispatch data update to socketio listeners...
-  function onControllerUpdate(_data) {
+}
+
+var state_service = {
+  setup: function(app, path) {
+    console.log('State service mounted on',path);
+    // realtime handler should be initialized when the server starts listening
+    // only then is the socketio available as app.io
+    init_realtime_handler(app.io);
+  },
+  find: function(params) {
+    console.log('state find');
+    return Promise.resolve(data);
+  },
+  create: function(_data) {
+    //console.log('new state created');
     data = _data;
-    io.emit('data', data)
+    return Promise.resolve(data);
   }
+}
 
-  // initialize the controller
-  controller(onControllerUpdate)
-
-}))
-
-app.listen(80, function(){
-  console.log('listening on *:80');
-});
+app
+  .use('state', state_service)
+  .configure(controller)
+  .listen(80, function(){
+    console.log('listening on *:80');
+  })
 

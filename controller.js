@@ -414,7 +414,7 @@ function decide() {
   }
 }
 
-var doNetUpdate = function(callback) {
+var doNetUpdate = function(state_service) {
   return function() {
     let temps = {};
     for (var name in sensors) {
@@ -424,7 +424,7 @@ var doNetUpdate = function(callback) {
       }
     }
     temps.L1_estimate = {t: L1TempEstimator.get()}
-    callback({
+    state_service.create({
       temps:temps,
       state:state,
       container: getContainerPercent(),
@@ -432,9 +432,10 @@ var doNetUpdate = function(callback) {
   }
 };
 
-var controller = function(on_update) {
+var controller = function() {
+  var app = this;
 
-  netUpdate = doNetUpdate(on_update);
+  netUpdate = doNetUpdate(app.service('state'));
 
   var process_loop = 0;
   function process() {
