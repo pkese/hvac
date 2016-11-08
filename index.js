@@ -1,24 +1,22 @@
 "use strict"
 
-if (typeof Promise === 'undefined') Promise = require('bluebird');
+const feathers = require('feathers');
+const errors = require('feathers-errors');
+const rest = require('feathers-rest');
+const hooks = require('feathers-hooks');
+const socketio = require('feathers-socketio');
 
-var feathers = require('feathers');
-var rest = require('feathers-rest');
-var hooks = require('feathers-hooks');
-var socketio = require('feathers-socketio');
+const state = require('./state');
 
-var state = require('./state');
-
-var controller = require('./controller')
+const controller = require('./controller');
 
 //Basic-Auth config
-var auth = require('basic-auth');
+const auth = require('basic-auth');
 
 var app = feathers()
   .configure(rest())
   .configure(hooks())
   .configure(socketio())
-
 
 /*
 credentials file should contain:
@@ -27,20 +25,7 @@ module.exports = {
   pass: "something"
 }
 */
-var auth_credentials = require('./secret-credentials.js')
-
-// Object.extend (aka assign) polyfill for Node 0.12
-Object.defineProperty(Object.prototype, "extend", {
-    enumerable: false,
-    value: function(from) {
-        var props = Object.getOwnPropertyNames(from);
-        var dest = this;
-        props.forEach(function(name) {
-          dest[name] = from[name];
-        });
-        return this;
-    }
-});
+const auth_credentials = require('./secret-credentials.js');
 
 var data = null;
 
@@ -78,49 +63,41 @@ app.get('/', function(req, res){
   }
 });
 
-function init_realtime_handler(io) {
-  io.on('connection', function (socket) {
-    let setHandler = propname => {
-      socket.on(propname, value => {
-        console.log("socket.io:", propname, "=", value);
-        state[propname] = value;
+var state_service = {
+  find(params) {
+    console.log('state find');
+    return Promise.resolve(data);
+  },
+  create(_data) {
+    //console.log('new state created');
+    data = _data;
+    return Promise.resolve(data);
+  },
+  update(key,data) {
+    //console.log('state::update',key,data);
+    if (['L0active','L1active','L0target_temp','L1target_temp'].includes(key)) {
+      const {value} = data;
+      if (state[key] !== value) {
+        console.log('set',key,':',state[key],'->',value);
+        state[key] = value;
         controller.decide();
         controller.refresh();
-      });
-    }
-    ['L0active','L1active','L0target_temp','L1target_temp'].forEach(setHandler);
-
-    socket.on('rf-temp', function(data) {
+      }
+    } else if (key === 'rf-temp') {
       //console.log('got rf:', data)
       if (!data.channel || typeof data.temp != 'number')
         return
       var target = [state.L1report,state.L0report,state.L2report][data.channel-1];
       if (typeof data.updated == 'string') data.updated = Date.parse(data.updated);
       // Object.assign(target, data);
-      target.extend(data);
+      Object.assign(target,data);
       //console.log('parsed as', data, 'into', target);
       controller.decide();
       //controller.refresh();
-    });
-  });
-}
-
-var state_service = {
-  setup: function(app, path) {
-    console.log('State service mounted on',path);
-    // realtime handler should be initialized when the server starts listening
-    // only then is the socketio available as app.io
-    init_realtime_handler(app.io);
+    } else {
+      return new errors.NotFound('Invalid control key "{key}"');
+    }
   },
-  find: function(params) {
-    console.log('state find');
-    return Promise.resolve(data);
-  },
-  create: function(_data) {
-    //console.log('new state created');
-    data = _data;
-    return Promise.resolve(data);
-  }
 }
 
 app
@@ -129,4 +106,3 @@ app
   .listen(80, function(){
     console.log('listening on *:80');
   })
-
