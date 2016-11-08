@@ -22,18 +22,19 @@
   "license": "ISC",
   "dependencies": {
     "basic-auth": "^1.0.4",
-    "bluebird": "^3.4.0",
+    "bluebird": "^3.4.6",
     "cookies": "^0.6.1",
     "ds18b20": "^0.1.0",
-    "express": "^4.13.4",
+    "express": "^4.14.0",
     "feathers": "^2.0.2",
     "feathers-hooks": "^1.6.1",
-    "feathers-rest": "^1.5.1",
-    "i2c-bus": "^1.1.0",
+    "feathers-rest": "^1.5.2",
+    "feathers-socketio": "^1.4.2",
+    "i2c-bus": "^1.1.2",
     "onoff": "^1.1.1",
-    "socket.io": "^1.4.6",
-    "socket.io-client": "^1.4.6",
-    "superagent": "^1.4.0",
-    "wiring-pi": "^2.1.1"
+    "socket.io": "^1.5.1",
+    "socket.io-client": "^1.5.1",
+    "superagent": "^1.8.4",
+    "wiring-pi": "^2.2.0"
   }
 }
