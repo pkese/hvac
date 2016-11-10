@@ -14,9 +14,6 @@ const controller = require('./controller');
 const auth = require('basic-auth');
 
 var app = feathers()
-  .configure(rest())
-  .configure(hooks())
-  .configure(socketio())
 
 /*
 credentials file should contain:
@@ -46,7 +43,8 @@ var cookieAuth = function(req, res) {
   };
 }
 
-app.get('/', function(req, res){
+app.get('/', (req, res) => {
+  req.socket.setNoDelay(true);
   var cookies = cookieAuth(req,res);
   var authorized = cookies.authorized();
   if (!authorized) {
@@ -55,7 +53,7 @@ app.get('/', function(req, res){
     cookies.authorize();
   }
   if (authorized) {
-    res.sendFile('index.html', {root: __dirname});
+    res.sendFile('index.html', {root: __dirname+'/client'});
   } else {
     res.statusCode = 401
     res.setHeader('WWW-Authenticate', 'Basic realm="example"')
@@ -63,9 +61,22 @@ app.get('/', function(req, res){
   }
 });
 
-var state_service = {
+
+app.use((req, res, next) => {
+  if (/.*\.js/.test(req.path)) {
+    res.charset = "utf-8";
+    req.url = req.url + '.gz';
+    res.header('Content-Encoding', 'gzip');
+    req.socket.setNoDelay(true);
+  }
+  next();
+});
+app.use( '/static', feathers.static(__dirname+'/client/build'));
+
+
+const state_service = {
   find(params) {
-    console.log('state find');
+    //console.log('state::find');
     return Promise.resolve(data);
   },
   create(_data) {
@@ -101,8 +112,11 @@ var state_service = {
 }
 
 app
+  .configure(rest())
+  .configure(hooks())
+  .configure(socketio())
   .use('state', state_service)
   .configure(controller)
-  .listen(80, function(){
-    console.log('listening on *:80');
+  .listen(8080, function(){
+    console.log('listening on *:8080');
   })

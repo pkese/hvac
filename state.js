@@ -3,7 +3,7 @@ module.exports = {
   L0active: false,
   L1active: false,
   L0target_temp: 21,
-  L1target_temp: 22.5,
+  L1target_temp: 21.5,
 
   heatL0: false,
   heatL1: false,
