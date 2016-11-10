@@ -1,0 +1,12 @@
+
+.*
+!.gitignore
+*~
+\#*\#
+.bak
+node_modules/
+client/node_modules/
+client/build/
+secret-credentials.js
+npm-debug.log
+installation/*.htpasswd

@@ -1,0 +1,39 @@
+{
+  "name": "toplota-UI",
+  "version": "0.0.2",
+  "description": "Logatec heating system",
+  "main": "index.js",
+  "scripts": {
+    "start": "./node_modules/.bin/webpack-dev-server --history-api-fallback --progress --port 3000",
+    "build": "node build.js production",
+    "webpack": "NODE_ENV=production ./node_modules/.bin/webpack --progress --verbose"
+  },
+  "keywords": [
+    "HVAC",
+    "Raspberry",
+    "Home",
+    "automation"
+  ],
+  "author": "Peter Keše",
+  "license": "ISC",
+  "dependencies": {
+    "babel-runtime": "^6.18.0",
+    "compression-webpack-plugin": "^0.3.2",
+    "es6-promise": "^4.0.5",
+    "react": "^15.3.2",
+    "react-dom": "^15.3.2",
+    "socket.io-client": "^1.5.1"
+  },
+  "devDependencies": {
+    "babel-core": "^6.18.2",
+    "babel-loader": "^6.2.7",
+    "babel-plugin-transform-class-properties": "^6.18.0",
+    "babel-plugin-transform-runtime": "^6.15.0",
+    "babel-preset-es2015": "^6.18.0",
+    "babel-preset-es2015-native-modules": "^6.9.4",
+    "babel-preset-es2015-webpack": "^6.4.3",
+    "babel-preset-react": "^6.16.0",
+    "webpack": "^2.1.0-beta.25",
+    "webpack-dev-server": "^2.0.0-beta"
+  }
+}
