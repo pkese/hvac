@@ -1,0 +1,13 @@
+[Unit]
+Description=Heating controller
+
+[Service]
+WorkingDirectory=/home/peter/work/hvac
+ExecStart=/usr/bin/npm start
+Restart=always
+StartLimitInterval=60
+StartLimitBurst=3
+CPUAffinity=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,49 @@
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Make sure that the script will "exit 0" on success or any other
+# value on error.
+#
+# In order to enable or disable this script just change the execution
+# bits.
+#
+# By default this script does nothing.
+
+# load and disable watchdog
+echo 'V' >> /dev/watchdog
+
+
+# manually configure ds2482 1-wire host adapter on the i2c bus
+echo ds2482 0x1c > /sys/bus/i2c/devices/i2c-1/new_device
+
+# scan 1-wire devices only few times, then stop scanning to release bus bandwidth
+for i in `seq 1 8`;
+do
+    echo "10" > /sys/bus/w1/devices/w1_bus_master$i/w1_master_search
+done;
+
+
+gpio mode 16 up # auto/manual switch
+gpio mode 16 in
+gpio mode 15 up
+gpio mode 15 in
+gpio mode 5 up
+gpio mode 5 in;
+#sh -c "gpio wfi 16 falling && sleep 1 && [ $(gpio read 16) == '0' ] && shutdown now" &
+
+#/bin/bash -c 'while true; do gpio wfi 15 falling; sleep 0.4; [ $(gpio read 15) == "0" ] && [ $(gpio read 16) == "0" ] && gpio mode 6 out && gpio write 6 1 && sleep 2 && shutdown now; done' &
+#/bin/bash -c 'while true; do gpio wfi 5 falling; sleep 0.4; [ $(gpio read 5) == "0" ] && [ $(gpio read 16) == "0" ] && gpio mode 6 out && gpio write 6 1 && reboot; done' &
+
+
+# modeswith + up -> reboot
+/bin/bash -c 'while true; do gpio wfi 15 falling; sleep 0.2; [ $(gpio read 15) == "0" ] && [ $(gpio read 1) == "0" ] && gpio mode 6 out && gpio write 6 1 && sleep 2 && reboot; done' &
+
+# modeswitch + down -> shutdown
+/bin/bash -c 'while true; do gpio wfi 15 falling; sleep 0.2; [ $(gpio read 15) == "0" ] && [ $(gpio read 5) == "0" ] && gpio mode 6 out && gpio write 6 1 && sleep 2 && shutdown now; done' &
+
+
+sleep 0.5
+
+exit 0
