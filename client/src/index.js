@@ -1,19 +1,38 @@
 // -*- coding: utf-8 -*-
 
+import 'index.html'; // make index.html get included into /build directory
 
 import ReactDOM from 'react-dom';
 import React from 'react';
-import io from 'socket.io-client';
 
-//import 'index.html';
+import io from 'socket.io-client';
+import feathers from 'feathers/client';
+import socketio from 'feathers-socketio/client';
+
+import Login from './login';
+
+const app = feathers();
+
+//console.log({env:process.env});
+
 
 let TempsList = ({temps}) => {
-  let renderTemp = (t, data) => (<tr><th>{t}</th><td>{data.t.toFixed(2)}&deg;C</td><td>{(60*data.d).toFixed(2)}</td></tr>);
-  let htmls = [];
-  for (var t in temps)
-    htmls.push(renderTemp(t, temps[t]));
-  return <table className="temps"><tbody>{htmls}</tbody></table>
+  const renderTemp = (t, data) => (
+    <tr key={t}>
+      <th>{t}</th>
+      <td>{data.t.toFixed(1)}&deg;C</td>
+      <td>{(60*data.d).toFixed(2)}</td>
+    </tr>
+  );
+  return (
+    <table className="temps">
+      <tbody>
+        { Object.keys(temps).map( t => renderTemp(t, temps[t] )) }
+      </tbody>
+    </table>
+  );
 };
+
 let Floor = ({level /*L0 L1 L2*/ , label, active, temp, rh, target_temp, activate, tempUpDown}) => {
   return (
     <div className={"panel floor " + (active ? 'active' : 'inactive')}>
@@ -60,14 +79,14 @@ let App = React.createClass({
     this.setState(newState);
   },
   fetchState(socket) {
-    socket.emit('state::find', {}, (err,state) => {
-      console.log('state::find');
-      if (err) console.log('state::find error',err);
-      else this.onUpstreamState(state);
-    });
+    app.service('state')
+      .find()
+      .then(this.onUpstreamState)
+      .catch(err => console.log('state::find error',err))
   },
   componentDidMount() {
-    let socket = io('/', {reconnectionDelayMax:5000000});
+    const socket = io(process.env.NODE_ENV=='development'?'//:80/':'/',{reconnectionDelayMax:5000000});
+    app.configure(socketio(socket));
     console.log('io',socket);
     this.setState({socket:socket});
     const connected = () => {
@@ -81,7 +100,8 @@ let App = React.createClass({
       console.log('disconnect',arguments);
       this.setState({connected:false});
     });
-    socket.on('state created', this.onUpstreamState);
+    //socket.on('state created', this.onUpstreamState);
+    app.service('state').on('created', this.onUpstreamState)
   },
   powerSwitch(level) {
     let id = level + 'active'
@@ -89,13 +109,15 @@ let App = React.createClass({
     let newState = {};
     newState[id] = active;
     this.setState(newState);
-    this.state.socket.emit('state::update', id, {value:active});
+    app.service('state').update(id, {value:active});
+    //this.state.socket.emit('state::update', id, {value:active});
   },
   tempUpDown(level, delta) {
     let id = level + 'target_temp';
     let value = this.state[id] + delta;
     console.log("+-", id, delta, value);
-    this.state.socket.emit('state::update', id, {value:value});
+    app.service('state').update(id, {value:value});
+    //this.state.socket.emit('state::update', id, {value:value});
     let newState = {};
     newState[id] = value;
     this.setState(newState);
@@ -106,6 +128,7 @@ let App = React.createClass({
     if (this.state.temps.cont1) container = this.state.temps.cont1.t.toFixed(0) + '/' + this.state.temps.cont2.t.toFixed(0) + '/' + this.state.temps.cont3.t.toFixed(0) + '/' + this.state.temps.cont4.t.toFixed(0);
     return (
       <div>
+      {/*<Login />*/}
         <div className='panel'>
           <h2 style={{marginTop:0, textDecoration:(this.state.connected?'none':'line-through')}}>Stanje</h2>
           <ul>

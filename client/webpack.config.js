@@ -12,10 +12,11 @@ module.exports = {
   entry: {
     js: './index.js',
     //vendor: ['react','react-dom','socket.io-client']
-      vendor: ['react','react-dom'],
+    vendor: ['react','react-dom'],
   },
   output: {
     path: path.join(__dirname, './build'),
+    publicPath: '/static/',
     filename: 'bundle.js'
   },
   module: {
@@ -27,6 +28,7 @@ module.exports = {
           name: '[name].[ext]'
         }
       },
+/*
       {
         test: /\.css$/,
         loaders: [
@@ -34,6 +36,7 @@ module.exports = {
           'css'
         ]
       },
+*/
       {
         test: /\.(js|jsx)$/,
         exclude: /node_modules/,
@@ -47,7 +50,7 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.jsx'],
     modules: [
-      path.resolve('./client'),
+      path.resolve('./src'),
       'node_modules'
     ]
   },
@@ -70,17 +73,17 @@ module.exports = {
       },
       sourceMap: true
     }),
-      new CompressionPlugin({
-	  asset: "[path].gz[query]",
-	  algorithm: "gzip",
-	  test: /\.js$|\.html$/
-      }),
+    new CompressionPlugin({
+      asset: "[path].gz[query]",
+      algorithm: "gzip",
+      test: /\.js$|\.html$/
+    }),
     new webpack.DefinePlugin({
       'process.env': { NODE_ENV: JSON.stringify(nodeEnv) }
     })
   ],
   devServer: {
-    contentBase: './client'
-    // hot: true
+    contentBase: './src',
+    hot: true
   }
 };
