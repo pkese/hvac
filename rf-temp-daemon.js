@@ -5,7 +5,7 @@ var socket = require('socket.io-client')("http://localhost:8080", {reconnectionD
 
 temp_receiver(function(data) {
   //console.log(data);
-  socket.emit('state::update','rf-temp', data);
+  socket.emit('state::patch','rf-temp', data);
 })
 
 var heartbeat = (function() {
@@ -19,7 +19,7 @@ var heartbeat = (function() {
   }
 })()
 
-socket.on('state updated', function(data) {
+socket.on('state patched', function(data) {
   //console.log('peer is alive', data);
   heartbeat();
 });

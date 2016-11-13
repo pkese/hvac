@@ -1,7 +1,7 @@
 "use strict"
 
-var wpi = require('wiring-pi')
-var LCD = require('./i2c-lcd')
+var wpi = require('wiring-pi');
+var LCD = require('./i2c-lcd');
 
 /*
 var watchdog = require("pi-watchdog")();
@@ -314,8 +314,8 @@ var L1TempEstimator = (function() {
       T_box = (T_box * (90*60/4) - T_box + sensors.L1_dist.temp) / (90*60/4);
       T_frame = sensors.L1_room.temp;
     },
-    get: function() {
-      if (state.L1report.temp && (Date.now() - state.L1report.updated < 15*60*1000)) {
+    get: function(calculated=false) {
+      if (!calculated && state.L1report.temp && (Date.now() - state.L1report.updated < 15*60*1000)) {
         return state.L1report.temp;
       } else {
         var temp = T_box - (T_box-T_frame)*2.12;
@@ -362,7 +362,7 @@ function decide() {
   if (overheat || state.L0active && _L0supply > state.L0target_temp + 10) {
     var heating = state.heatL0;
     // do we have report
-    if (state.L0report && state.L0report.temp && (Date.now() - state.L1report.updated < 15*60*1000)) {
+    if (state.L0report && state.L0report.temp && (Date.now() - state.L0report.updated < 15*60*1000)) {
       var L0temp = state.L0report.temp;
       var L0target = state.L0target_temp;
       state.heatL0 = heating ? L0temp<L0target+0.1 : L0temp<L0target;
@@ -423,12 +423,11 @@ var doNetUpdate = function(state_service) {
         temps[name] = {t: sensor.temp, d: sensor.delta}
       }
     }
-    temps.L1_estimate = {t: L1TempEstimator.get()}
-    state_service.create({
-      temps:temps,
-      state:state,
-      container: getContainerPercent(),
-    });
+    temps.L1_estimate = {t: L1TempEstimator.get(true /* calculated temp */)}
+
+    state_service.update('temps',temps);
+    state_service.update('state',state);
+    state_service.update('container', {percent: getContainerPercent()});
   }
 };
 

@@ -18,7 +18,6 @@
   "license": "ISC",
   "dependencies": {
     "babel-runtime": "^6.18.0",
-    "compression-webpack-plugin": "^0.3.2",
     "es6-promise": "^4.0.5",
     "feathers-client": "^1.7.2",
     "feathers-socketio": "^1.4.2",
@@ -35,6 +34,8 @@
     "babel-preset-es2015-native-modules": "^6.9.4",
     "babel-preset-es2015-webpack": "^6.4.3",
     "babel-preset-react": "^6.16.0",
+    "babel-preset-stage-0": "^6.16.0",
+    "compression-webpack-plugin": "^0.3.2",
     "file-loader": "^0.9.0",
     "webpack": "^2.1.0-beta.25",
     "webpack-dev-server": "^2.0.0-beta"

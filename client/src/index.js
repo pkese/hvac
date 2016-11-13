@@ -71,12 +71,19 @@ let App = React.createClass({
     connected: false,
   }},
   onUpstreamState(data) {
-    if (data===null) return;
-    //console.log(data);
-    this.setState(data);
-    var newState = data.state;  // copy everything from data.state to root level,
-    newState.temps = data.temps;  // leave 'temps' as separate structure
-    this.setState(newState);
+    data.map( this.onPatchState );
+  },
+  onPatchState({id, ...vals}) {
+    //console.log('patch',id,vals);
+    if (id==='temps') {
+      this.setState({[id]: {...this.state.temps, ...vals}});
+    } else if (id==='container') {
+      this.setState({[id]: vals.percent});
+    } else if (id==='state') {
+      this.setState(vals);
+    } else {
+      console.log('invalid')
+    }
   },
   fetchState(socket) {
     app.service('state')
@@ -100,8 +107,9 @@ let App = React.createClass({
       console.log('disconnect',arguments);
       this.setState({connected:false});
     });
-    //socket.on('state created', this.onUpstreamState);
-    app.service('state').on('created', this.onUpstreamState)
+    //app.service('state').on('created', this.onUpstreamState);
+    //app.service('state').on('created', args => {console.log('#created',args)});
+    app.service('state').on('patched', this.onPatchState);
   },
   powerSwitch(level) {
     let id = level + 'active'
@@ -109,15 +117,13 @@ let App = React.createClass({
     let newState = {};
     newState[id] = active;
     this.setState(newState);
-    app.service('state').update(id, {value:active});
-    //this.state.socket.emit('state::update', id, {value:active});
+    app.service('state').patch('state', {[id]:active});
   },
   tempUpDown(level, delta) {
     let id = level + 'target_temp';
     let value = this.state[id] + delta;
     console.log("+-", id, delta, value);
-    app.service('state').update(id, {value:value});
-    //this.state.socket.emit('state::update', id, {value:value});
+    app.service('state').patch('state', {[id]:value});
     let newState = {};
     newState[id] = value;
     this.setState(newState);

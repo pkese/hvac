@@ -5,8 +5,9 @@ const errors = require('feathers-errors');
 const rest = require('feathers-rest');
 const hooks = require('feathers-hooks');
 const socketio = require('feathers-socketio');
+const _ = require('lodash');
 
-const state = require('./state');
+const global_state = require('./state');
 
 const controller = require('./controller');
 
@@ -23,8 +24,6 @@ module.exports = {
 }
 */
 const auth_credentials = require('./secret-credentials.js');
-
-var data = null;
 
 var crypto = require('crypto')
 var Cookies = require('cookies');
@@ -74,48 +73,90 @@ app.use((req, res, next) => {
 app.use( '/static', feathers.static(__dirname+'/client/build'));
 
 
-const state_service = {
-  find(params) {
-    //console.log('state::find');
-    return Promise.resolve(data);
-  },
-  create(_data) {
-    //console.log('new state created');
-    data = _data;
-    return Promise.resolve(data);
-  },
-  update(key,data) {
-    //console.log('state::update',key,data);
-    if (['L0active','L1active','L0target_temp','L1target_temp'].includes(key)) {
-      const {value} = data;
-      if (state[key] !== value) {
-        console.log('set',key,':',state[key],'->',value);
-        state[key] = value;
-        controller.decide();
-        controller.refresh();
+function state_service() {
+  const app = this;
+  const state = {};
+  let self = null;
+
+  const getPatches = (src,dst) => Object.keys(dst)
+    .reduce((result,key) => {
+      if (!_.isEqual(src[key], dst[key])) result[key] = dst[key];
+      return result;
+    }, {})
+
+  class StateService {
+    setup(app,path) {
+      self = app.service('state');
+    };
+    find() {
+      //console.log('state::find');
+      return Promise.resolve(Object.keys(state).map(key => Object.assign({},state[key],{id:key})));
+    };
+    get(key) {
+      return Promise.resolve(Object.assign({},state[key],{id:key}));
+    };
+    update(key, data) {
+      //console.log('update',key,data);
+      const curr = state[key];
+      if (typeof curr !== 'object') {
+        self.patch(key,data); // notify listeners
+      } else {
+        const patch = getPatches(curr,data);
+        //console.log({curr,data,patch});
+        if (!_.isEmpty(patch)) self.patch(key,patch);
       }
-    } else if (key === 'rf-temp') {
-      //console.log('got rf:', data)
-      if (!data.channel || typeof data.temp != 'number')
-        return
-      var target = [state.L1report,state.L0report,state.L2report][data.channel-1];
-      if (typeof data.updated == 'string') data.updated = Date.parse(data.updated);
-      // Object.assign(target, data);
-      Object.assign(target,data);
-      //console.log('parsed as', data, 'into', target);
-      controller.decide();
-      //controller.refresh();
-    } else {
-      return new errors.NotFound('Invalid control key "{key}"');
-    }
-  },
+      //return Promise.resolve({id:key,...data});
+    };
+    patch(key, data) {
+      //console.log('state::patch',key,data);
+
+      if (key === 'rf-temp') {
+        console.log('got rf:', data)
+        if (!data.channel || typeof data.temp != 'number')
+          return
+        var target = ['L1report','L0report','L2report'][data.channel-1];
+        if (typeof data.updated == 'string') data.updated = Date.parse(data.updated);
+        // Object.assign(target, data);
+        global_state[target] = data;
+        //console.log('parsed as', data, 'into', target);
+        controller.decide();
+        //controller.refresh();
+
+        return;
+      }
+
+      // parse settings & forward them to controller
+      ['L0active','L1active','L0target_temp','L1target_temp'].forEach( name => {
+        if (name in data) {
+          const value = data[name];
+          if (global_state[name] !== value) {
+            console.log('set',name,':',global_state[name],'->',value);
+            global_state[name] = value;
+            controller.decide();
+            controller.refresh();
+          }
+        }
+      });
+
+      let data_copy = Object.assign({},data);
+      if (typeof state[key] !== 'object') { // set
+        state[key] = data_copy; // shallow copy
+      } else { // merge
+        Object.assign(state[key],data)
+      }
+      // return the record to emit 'patched' notification
+      data_copy.id = key;
+      return Promise.resolve(data_copy);
+    };
+  }
+  app.service('state', new StateService());
 }
 
 app
   .configure(rest())
   .configure(hooks())
   .configure(socketio())
-  .use('state', state_service)
+  .configure(state_service)
   .configure(controller)
   .listen(8080, function(){
     console.log('listening on *:8080');
