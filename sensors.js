@@ -88,14 +88,21 @@ var other_sensors = ds18b20.sensors(function(err, ids) {
     return;
   }
   for (var id of ids) {
-    if (!known_sensors.hasOwnProperty(id)) sensors[id] = Sensor(id);
-   }
+    if (!(id in known_sensors)) sensors[id] = Sensor(id);
+  }
 })
 
-sensors._fetch_all = function() {
-  var promises = [];
-  for (var id in known_sensors) promises.push(known_sensors[id].update());
-  return Promise.all(promises);
+const fetch_all_sensors = () => {
+  return Promise.all(
+    Object.values(known_sensors).map( sensor => sensor.update() )
+  )
+  .then( () => Object.entries( sensors ).reduce( (acc, [name,sensor]) => {
+    acc[name] = sensor.temp;
+    return acc;
+  }, {}))
 }
 
-module.exports = sensors;
+module.exports = {
+  sensors,
+  fetch_all_sensors
+};

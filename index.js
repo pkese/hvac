@@ -105,20 +105,19 @@ function state_service() {
         //console.log({curr,data,patch});
         if (!_.isEmpty(patch)) self.patch(key,patch);
       }
-      //return Promise.resolve({id:key,...data});
+      //return Promise.resolve(data);
     };
     patch(key, data) {
       //console.log('state::patch',key,data);
 
       if (key === 'rf-temp') {
-        console.log('got rf:', data)
+        //console.log('got rf:', data)
         if (!data.channel || typeof data.temp != 'number')
           return
-        var target = ['L1report','L0report','L2report'][data.channel-1];
         if (typeof data.updated == 'string') data.updated = Date.parse(data.updated);
-        // Object.assign(target, data);
-        global_state[target] = data;
-        //console.log('parsed as', data, 'into', target);
+        const report_key = ['L1report','L0report','L2report'][data.channel-1];
+        global_state[report_key] = data;
+        //console.log('parsed as', data, 'into', report_key);
         controller.decide();
         //controller.refresh();
 
@@ -152,12 +151,27 @@ function state_service() {
   app.service('state', new StateService());
 }
 
-app
-  .configure(rest())
-  .configure(hooks())
-  .configure(socketio())
-  .configure(state_service)
-  .configure(controller)
-  .listen(8080, function(){
-    console.log('listening on *:8080');
-  })
+
+var MongoClient = require('mongodb').MongoClient;
+var mongodb = require('feathers-mongodb');
+
+MongoClient
+.connect('mongodb://localhost:27017/hvac')
+.then(db => {
+  app
+    .configure(rest())
+    .configure(hooks())
+    .configure(socketio())
+    .configure(state_service)
+    .use('logs', mongodb({
+      Model: db.collection('logs'),
+      paginate: {
+        default: 100,
+        max: 500
+      }
+    }))
+    .configure(controller)
+    .listen(8080, function(){
+      console.log('listening on *:8080');
+    })
+});

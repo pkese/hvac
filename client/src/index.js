@@ -71,6 +71,7 @@ let App = React.createClass({
     connected: false,
   }},
   onUpstreamState(data) {
+    console.log('state:',data);
     data.map( this.onPatchState );
   },
   onPatchState({id, ...vals}) {

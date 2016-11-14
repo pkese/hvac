@@ -1,7 +1,7 @@
 "use strict"
 
-var wpi = require('wiring-pi');
-var LCD = require('./i2c-lcd');
+const wpi = require('wiring-pi');
+const LCD = require('./i2c-lcd');
 
 /*
 var watchdog = require("pi-watchdog")();
@@ -10,9 +10,9 @@ watchdog.setTimeout(45, function(err, timeout) {
 })
 */
 
-var sensors = require('./sensors')
-var relays = require('./relays')
-var state = require('./state')
+const {sensors, fetch_all_sensors} = require('./sensors')
+const relays = require('./relays')
+const state = require('./state')
 
 // initialize here
 
@@ -435,20 +435,19 @@ var controller = function() {
   var app = this;
 
   netUpdate = doNetUpdate(app.service('state'));
+  const logger = require('./logger')(app.service('logs'));
 
-  var process_loop = 0;
   function process() {
 
-    if (process_loop++ % 4 != 0)
-      return;
-
-    sensors._fetch_all()
-    .then(function() {
+    fetch_all_sensors()
+    .then( temps => {
       try {
         L1TempEstimator.update();
         decide();
         refresh()
         relays._blink_all();
+        //console.log({temps});
+        logger.put(state,temps);
       } catch (x) {
         console.log(x);
         console.log(x.stack);
@@ -463,13 +462,15 @@ var controller = function() {
     });
   }
 
-  sensors._fetch_all().then(function() {
+  fetch_all_sensors()
+  .then( temps => {
     L1TempEstimator.init();
     console.log('initialized (T='+L1TempEstimator.get().toFixed(2)+')');
-    refresh();
+    logger.init(state,temps);
     process();
-    setInterval(process, 1000);
+    return refresh()
   })
+  .then( () => setInterval(process, 4000) );
 }
 
 controller.refresh = refresh;
