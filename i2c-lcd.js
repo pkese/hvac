@@ -1,269 +1,170 @@
 
 // copied from https://github.com/sweetpi/i2c-lcd
 
-var Promise = require('bluebird');
-var i2c_bus = require('i2c-bus');
-var assert = require('assert');
+const Promise = require('bluebird');
+const i2c_bus = require('i2c-bus');
+const assert = require('assert');
 
-var displayPorts = {
+const displayPorts = {
   RS: 0x01,
   E: 0x04,
+  backlight: 0x08,
+
   D4: 0x10,
   D5: 0x20,
   D6: 0x40,
   D7: 0x80,
+
   CHR: 1,
   CMD: 0,
-  backlight: 0x08,
+
   RW: 0x20
 };
 
-var i2c = function(address, busnum) {
-    var bus = i2c_bus.openSync(1);
-    return {
-        writeByteAsync: function(x) {
-            return new Promise(function(resolve, reject) {
-                bus.sendByte(address, x, function(err) {
-                    if (err) {console.log('err',err); reject(err);}
-                    else resolve();
-                });
-            })
-        },
-    }
+const I2C = (address, busnum) => {
+  let bus = i2c_bus.openSync(1);
+  return {
+    writeByteAsync: x => new Promise( (resolve, reject) => {
+      bus.sendByte(address, x, err => {
+        if (err) {console.log('err',err); reject(err);}
+        else resolve();
+      });
+    }),
+  }
 }
 
-LCD = (function() {
-  function LCD(busnum, address) {
-    if (typeof busnum == 'undefined') busnum = 1;
-    if (typeof address == 'undefined') address = 0x27;
-    this.i2c = new i2c(address, busnum);
+const LCD = (busnum = 1, address = 0x27) => {
+  
+  const i2c = I2C(address, busnum);
+
+  function write4(x, c) {
+    const a = x & 0xf0 | displayPorts.backlight | c;
+    return Promise.resolve()
+    .then(() => i2c.writeByteAsync(a))
+    //.delay(1)
+    .then(() => i2c.writeByteAsync(a | displayPorts.E))
+    .then(() => i2c.writeByteAsync(a))
   }
 
-  LCD.prototype.init = function() {
-    return Promise.resolve().then((function(_this) {
-      return function() {
-        return _this.write4(0x30, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write4(0x30, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write4(0x30, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write4(LCD.FUNCTIONSET | LCD._4BITMODE | LCD._2LINE | LCD._5x10DOTS, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write(LCD.ENTRYMODESET | LCD.ENTRYLEFT, displayPorts.CMD);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write(LCD.CLEARDISPLAY, displayPorts.CMD);
-      };
-    })(this)).delay(200);
-  };
+  function write(x, c) {
+    return Promise.resolve()
+    .then(() => write4(x, c))
+    .then(() => write4(x << 4, c))
+  }
 
-  LCD.prototype.write4 = function(x, c) {
-    var a;
-    a = x & 0xf0;
-    return Promise.resolve().then((function(_this) {
-      return function() {
-        return _this.i2c.writeByteAsync(a | displayPorts.backlight | c);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.i2c.writeByteAsync(a | displayPorts.E | displayPorts.backlight | c);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.i2c.writeByteAsync(a | displayPorts.backlight | c);
-      };
-    })(this));
-  };
+  return {
+    /**
+    intialize the display
+     */
+    init: () => {
+      return Promise.resolve()
+      .then(() => write4(0x30, displayPorts.CMD))
+      .then(() => write4(0x30, displayPorts.CMD))
+      .then(() => write4(0x30, displayPorts.CMD))
+      .then(() => write4(LCD.FUNCTIONSET | LCD._4BITMODE | LCD._2LINE | LCD._5x10DOTS, displayPorts.CMD))
+      .then(() => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON, displayPorts.CMD))
+      .then(() => write(LCD.ENTRYMODESET | LCD.ENTRYLEFT, displayPorts.CMD))
+      .then(() => write(LCD.CLEARDISPLAY, displayPorts.CMD))
+      .delay(200);
+    },
+    
+    /**
+    write text at current cursor position
+    */
+    print: str => {
+      assert(typeof str === "string");
+      return Promise.each(str.split(''), ch => write(ch.charCodeAt(0), displayPorts.CHR));
+    },
+ 
+    clear: () => write(LCD.CLEARDISPLAY, displayPorts.CMD),
+    
+     /**
+    flashing block for the current cursor
+     */
+    cursorFull: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKON, displayPorts.CMD),
+ 
+    /**
+    small line under the current cursor
+     */
+    cursorUnder: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKOFF, displayPorts.CMD),
 
-  LCD.prototype.write = function(x, c) {
-    return Promise.resolve().then((function(_this) {
-      return function() {
-        return _this.write4(x, c);
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write4(x << 4, c);
-      };
-    })(this));
-  };
+    /**
+    set cursor to 0,0
+     */
+    home: () => write(LCD.SETDDRAMADDR | 0*0, displayPorts.CMD),
 
-  LCD.prototype.clear = function() {
-    return this.write(LCD.CLEARDISPLAY, displayPorts.CMD);
-  };
+    /**
+    set cursor pos, top left = 0,0
+     */
+    setCursor: (x, y) => {
+      assert(typeof x === "number");
+      assert(typeof y === "number");
+      assert(0 <= y && y <= 3);
+      const line_offset = [0x00, 0x40, 0x14, 0x54];
+      return write(LCD.SETDDRAMADDR | (line_offset[y] + x), displayPorts.CMD);
+    },
 
-  LCD.prototype.print = function(str) {
-    var char, charCodes;
-    assert(typeof str === "string");
-    charCodes = (function() {
-      var _i, _len, _results;
-      _results = [];
-      for (_i = 0, _len = str.length; _i < _len; _i++) {
-        char = str[_i];
-        _results.push(char.charCodeAt(0));
-      }
-      return _results;
-    })();
-    return Promise.each(charCodes, (function(_this) {
-      return function(charCode) {
-        return _this.write(charCode, displayPorts.CHR);
-      };
-    })(this));
-  };
+    /**
+    Turn underline cursor off
+     */
+    blink_off: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSOROFF | LCD.BLINKOFF, displayPorts.CMD),
 
+    /**
+    Turn underline cursor on
+     */
+    blink_on: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKOFF, displayPorts.CMD),
 
-  /**
-  flashing block for the current cursor
-   */
+    /**
+    Turn block cursor off
+     */
+    cursor_off: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSOROFF | LCD.BLINKON, displayPorts.CMD),
 
-  LCD.prototype.cursorFull = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKON, displayPorts.CMD);
-  };
+    /**
+    Turn block cursor on
+     */
+    cursor_on: () => write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKON, displayPorts.CMD),
 
+    /**
+    setBacklight
+     */
+    setBacklight: val => {
+      displayPorts.backlight = (val ? 0x08 : 0x00);
+      return write(LCD.DISPLAYCONTROL, displayPorts.CMD);
+    },
 
-  /**
-  small line under the current cursor
-   */
+    /**
+    setContrast stub
+     */
+    setContrast: (val) => write(LCD.DISPLAYCONTROL, displayPorts.CMD),
 
-  LCD.prototype.cursorUnder = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKOFF, displayPorts.CMD);
-  };
+    /**
+    Turn display off
+     */
+    off: () => {
+      displayPorts.backlight = 0x00;
+      return write(LCD.DISPLAYCONTROL | LCD.DISPLAYOFF, displayPorts.CMD);
+    },
 
+    /**
+    Turn display on
+     */
+    on: () => {
+      displayPorts.backlight = 0x08;
+      return write(LCD.DISPLAYCONTROL | LCD.DISPLAYON, displayPorts.CMD);
+    },
 
-  /**
-  set cursor pos, top left = 0,0
-   */
-
-  LCD.prototype.setCursor = function(x, y) {
-    var l;
-    assert(typeof x === "number");
-    assert(typeof y === "number");
-    assert((0 <= y && y <= 3));
-    l = [0x00, 0x40, 0x14, 0x54];
-    return this.write(LCD.SETDDRAMADDR | (l[y] + x), displayPorts.CMD);
-  };
-
-
-  /**
-  set cursor to 0,0
-   */
-
-  LCD.prototype.home = function() {
-    return this.setCursor(0, 0);
-  };
-
-
-  /**
-  Turn underline cursor off
-   */
-
-  LCD.prototype.blink_off = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSOROFF | LCD.BLINKOFF, displayPorts.CMD);
-  };
-
-
-  /**
-  Turn underline cursor on
-   */
-
-  LCD.prototype.blink_on = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKOFF, displayPorts.CMD);
-  };
-
-
-  /**
-  Turn block cursor off
-   */
-
-  LCD.prototype.cursor_off = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSOROFF | LCD.BLINKON, displayPorts.CMD);
-  };
-
-
-  /**
-  Turn block cursor on
-   */
-
-  LCD.prototype.cursor_on = function() {
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON | LCD.CURSORON | LCD.BLINKON, displayPorts.CMD);
-  };
-
-
-  /**
-  setBacklight
-   */
-
-  LCD.prototype.setBacklight = function(val) {
-    displayPorts.backlight = (val ? 0x08 : 0x00);
-    return this.write(LCD.DISPLAYCONTROL, displayPorts.CMD);
-  };
-
-
-  /**
-  setContrast stub
-   */
-
-  LCD.prototype.setContrast = function(val) {
-    return this.write(LCD.DISPLAYCONTROL, displayPorts.CMD);
-  };
-
-
-  /**
-  Turn display off
-   */
-
-  LCD.prototype.off = function() {
-    displayPorts.backlight = 0x00;
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYOFF, displayPorts.CMD);
-  };
-
-
-  /**
-  Turn display on
-   */
-
-  LCD.prototype.on = function() {
-    displayPorts.backlight = 0x08;
-    return this.write(LCD.DISPLAYCONTROL | LCD.DISPLAYON, displayPorts.CMD);
-  };
-
-
-  /**
-  set special character 0..7, data is an array(8) of bytes, and then return to home addr
-   */
-
-  LCD.prototype.createChar = function(ch, data) {
-    assert(Array.isArray(data));
-    assert(data.length === 8);
-    return this.write(LCD.SETCGRAMADDR | ((ch & 7) << 3), displayPorts.CMD).then((function(_this) {
-      return function() {
-        return Promise.each(data, function(d) {
-          return _this.write(d, displayPorts.CHR);
-        });
-      };
-    })(this)).then((function(_this) {
-      return function() {
-        return _this.write(LCD.SETDDRAMADDR, displayPorts.CMD);
-      };
-    })(this));
-  };
-
-  return LCD;
-
-})();
+    /**
+    set special character 0..7, data is an array(8) of bytes, and then return to home addr
+     */
+    createChar: (ch, data) => {
+      assert(Array.isArray(data));
+      assert(data.length === 8);
+      return write(LCD.SETCGRAMADDR | ((ch & 7) << 3), displayPorts.CMD)
+      .then(() => Promise.each(data, d => write(d, displayPorts.CHR)))
+      .then(() => write(LCD.SETDDRAMADDR, displayPorts.CMD))
+    },
+  }
+}
 
 LCD.CLEARDISPLAY = 0x01;
 

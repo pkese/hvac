@@ -20,7 +20,7 @@ let TempsList = ({temps}) => {
   const renderTemp = (t, data) => (
     <tr key={t}>
       <th>{t}</th>
-      <td>{data.t.toFixed(1)}&deg;C</td>
+      <td>{data && typeof(data.t) == 'number' ? data.t.toFixed(1) : '??'}&deg;C</td>
       <td>{(60*data.d).toFixed(2)}</td>
     </tr>
   );
@@ -94,7 +94,7 @@ let App = React.createClass({
   },
   componentDidMount() {
     const socket = io(process.env.NODE_ENV=='development'?'//:80/':'/',{reconnectionDelayMax:5000000});
-    app.configure(socketio(socket));
+    app.configure(socketio(socket, { timeout: 20000 }));
     console.log('io',socket);
     this.setState({socket:socket});
     const connected = () => {
@@ -131,8 +131,10 @@ let App = React.createClass({
   },
   render() {
     //console.log(this.state);
-    let container = '';
-    if (this.state.temps.cont1) container = this.state.temps.cont1.t.toFixed(0) + '/' + this.state.temps.cont2.t.toFixed(0) + '/' + this.state.temps.cont3.t.toFixed(0) + '/' + this.state.temps.cont4.t.toFixed(0);
+      const temp2text = temp => temp && typeof temp.t == 'number' ? temp.t.toFixed(0) : '??';
+      let container = ['cont1','cont2','cont3','cont4']
+	  .map(name => temp2text(this.state.temps[name]))
+	  .join('/');
     return (
       <div>
       {/*<Login />*/}

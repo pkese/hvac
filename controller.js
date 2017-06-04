@@ -2,6 +2,7 @@
 
 const wpi = require('wiring-pi');
 const LCD = require('./i2c-lcd');
+const ipaddress = require('./ipaddress')
 
 /*
 var watchdog = require("pi-watchdog")();
@@ -13,6 +14,7 @@ watchdog.setTimeout(45, function(err, timeout) {
 const {sensors, fetch_all_sensors} = require('./sensors')
 const relays = require('./relays')
 const state = require('./state')
+
 
 // initialize here
 
@@ -111,7 +113,7 @@ display:
 | <spanje> 18.0 dc
 */
 
-let lcd = new LCD();
+let lcd = LCD();
 let lcdPromise = lcd.init();
 /*
 function testLCD() {
@@ -151,57 +153,77 @@ function getContainerPercent() {
   return percent;
 }
 
-refresh = function() {
-    //console.log('refresh');
-    netUpdate()
-    let L1_temp = L1TempEstimator.get()
-    lcdPromise = lcdPromise.then(function() {
-      return lcd.home();
-    }).then(function() {
-      //if (sensors.aux.temp != 'undefined') ...
-      let percent = getContainerPercent();
-      let s = '';
-      //s += sensors.aux.temp.toFixed(1);
-      s += L1_temp.toFixed(1);
-      s += ' ' + sensors.cont1.temp.toFixed(0);
-      s += '/' + ((sensors.cont2.temp + sensors.cont3.temp)/2.0).toFixed(0);
-      s += '/' + sensors.cont4.temp.toFixed(0);
-      s += String.fromCharCode(0xdf)+" ";
-      s += percent.toFixed(1) + "%  ";
-      return lcd.print(s)
-    }).then(function() {
-      return lcd.setCursor(0,1);
-    }).then(function() {
-      return lcd.print("");
-    }).then(function() {
-      return lcd.setCursor(0,2);
-    }).then(function() {
-      if (checkManualMode()) {
-        return lcd.print("   ROCNO DELOVANJE     ");
-      } else {
-        var s = "Nacin: ";
-        if (state.L1active && L1_temp > state.L1target_temp && sensors.L1_floor.temp > sensors.L1_pump.temp) {
-          s += "hlajenje "+state.L1target_temp.toFixed(1);
-        } else if (state.L1active) {
-          s += "gretje "+state.L1target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C";
-        } else {
-          s += "neaktivno     "
-        }
-        return lcd.print(s);
-      }
-    }).then(function() {
-      return lcd.setCursor(0,3);
-    }).then(function() {
-      if (checkManualMode()) {
-        return lcd.print("  [nacin] za izklop");
-      } else {
-        return lcd.print("                    ");
-      }
+refresh = ( () => {
 
-    //}).then(function() {
-    })
+  let loop = 0;
+  let screen = Array(20*4).join(" ");
+
+  const renderScreen = () => {
+    let s = '';
+    const goline = line => {while (s.length < line*20) s += ' ';}
+
+    //goline(0);
+    
+    //if (sensors.aux.temp != 'undefined') ...
+
+    const L1_temp = L1TempEstimator.get();
+    const percent = getContainerPercent();
+    
+    //s += sensors.aux.temp.toFixed(1);
+    s += L1_temp.toFixed(1);
+    s += ' ' + sensors.cont1.temp.toFixed(0);
+    s += '/' + ((sensors.cont2.temp + sensors.cont3.temp)/2.0).toFixed(0);
+    s += '/' + sensors.cont4.temp.toFixed(0);
+    s += String.fromCharCode(0xdf)+" ";
+    s += percent.toFixed(1) + "%  ";
+
+    goline(2)
+    
+    if (checkManualMode()) {
+      s += "   ROCNO DELOVANJE     ";
+    } else {
+      s += "Nacin: ";
+      //if (state.L1active && L1_temp > state.L1target_temp && sensors.L1_floor.temp > sensors.L1_pump.temp) {
+      //  s += "hlajenje "+state.L1target_temp.toFixed(1);
+      //} else
+      if (state.L1active) {
+        s += "gretje "+state.L1target_temp.toFixed(1)+String.fromCharCode(0xdf)+"C";
+      } else {
+        s += "neaktivno     "
+      }
+    }
+
+    goline(3);
+    if (checkManualMode()) {
+      s += "  [nacin] za izklop";
+    } else {
+      s += ipaddress();
+    }
+    
+    goline(4);
+    return s;
+  }
+  
+  return () => {
+    //console.log('refresh');
+    netUpdate();
+    
+    let nextScreen = renderScreen();
+
+    if (++loop % 256 == 0) {
+      lcdPromise = lcdPromise
+      .then(() => lcd.init())
+    } else if (nextScreen === screen)
+      return lcdPromise;
+    
+    lcdPromise = lcdPromise
+      .then(() => lcd.home())
+      .then(() => lcd.print(nextScreen))
+      .then(() => {screen = nextScreen})
+      
     return lcdPromise;
-}
+  }  
+})();
 
 function MixerValve(up_relay, down_relay) {
   var currentDir = 0;
@@ -274,7 +296,7 @@ function Heating(pump, mixerValve, out, ret, hot) {
     if (heat) {
       var proj_temp = out.temp + out.delta * 25 + ret.delta * 15 + hot.delta * 15;
       var req_temp = 33 + (temp_delta*10) + (33-ret.temp)*5;
-      if (req_temp > 42) req_temp = 42;	
+      if (req_temp > 46) req_temp = 46;	
       //console.log(proj_temp, req_temp, temp_delta, out.temp, ret.temp, hot.temp);
       var mixerDir;	
       if (proj_temp > req_temp+2.5) mixerDir = -1; // cold
@@ -328,10 +350,14 @@ var L1TempEstimator = (function() {
 })();
 
 function decide() {
+  var STOVE_MAX_OUT = 77;
+  var STOVE_MAX_IN = STOVE_MAX_OUT - 5; 
   var target = state.L1active ? state.L1target_temp : 4.0; // 4 deg when not active (defrost)
   var supply = Math.max(sensors.hot.temp, sensors.cont1.temp-1);
-  var overheat = (sensors.stove.temp > 77 && sensors.cold.temp > 72);
-  state.overheat = overheat;
+  var overtemp = Math.max(0, (sensors.stove.temp - STOVE_MAX_OUT) + (sensors.cold.temp - STOVE_MAX_IN));
+  var overheat = state.overheat = (state.overheat)
+    ? overtemp > 0.5 // .5 deg above to turn overheat mode on
+    : overtemp > 0;
 
   // B o i l e r
   if ( // turn on boiler circulation if ...
@@ -339,27 +365,24 @@ function decide() {
     && sensors.boiler.temp < 50 // heat boiler only to 50 deg
     && sensors.boiler.temp < supply - 5 // supply water is hot enough
     && sensors.boiler_ret.temp < supply - 10 // there is enough temperature difference through boiler
-    ||
-    overheat && sensors.boiler_ret.temp < 68 // while return water is not too hot in overheat mode
   ) {
     state.heatBoiler = true;
-    relays.boiler_pump.on();
   } else if (
-    !overheat &&
-    ( sensors.stove.temp < 54 // stove is not hot
-      || sensors.boiler.temp > 51 // boiler is warm enough
-      || sensors.boiler.temp > supply - 4 // supply water too cold
-      || sensors.boiler_ret.temp > supply - 5 // not enough temperature difference through boiler
-    )
-    || sensors.boiler_ret.temp > 70 // return water is too hot in overheat mode (+ prevent Legionnaires' disease)
+    sensors.stove.temp < 54 // stove is not hot
+    || sensors.boiler.temp > 51 // boiler is warm enough
+    || sensors.boiler.temp > supply - 4 // supply water too cold
+    || sensors.boiler_ret.temp > supply - 5 // not enough temperature difference through boiler
   ) {
     state.heatBoiler = false;
-    relays.boiler_pump.off();
   }
+  state.heatBoiler |= overheat;
+  state.heatBoiler &= sensors.boiler_ret.temp < STOVE_MAX_IN - 5; // return wather is not too hot
+  relays.boiler_pump.set(state.heatBoiler);
+  
 
   // L e v e l - 0
   var _L0supply = supply + (state.heatL0 ? +0.11 : -0.11);
-  if (overheat || state.L0active && _L0supply > state.L0target_temp + 10) {
+  if (state.L0active && _L0supply > state.L0target_temp + 10) {
     var heating = state.heatL0;
     // do we have report
     if (state.L0report && state.L0report.temp && (Date.now() - state.L0report.updated < 15*60*1000)) {
@@ -369,23 +392,21 @@ function decide() {
     } else {
       state.heatL0 = false;
     }
-    if (overheat) {
-      state.heatL0 |= sensors.L0_ret.temp < 60 || sensors.L0_pump.temp < 60
-    }
-    relays.L0_pump.set(state.heatL0);
   } else {
-    relays.L0_pump.off();
     state.heatL0 = false;
   }
+  // check overheat temperature above threshold
+  state.heatL0 |= (overtemp > 4) && sensors.L0_ret.temp < STOVE_MAX_IN-10;
+  relays.L0_pump.set(state.heatL0);
 
   // L e v e l - 1
   var _L1supply = supply + (state.heatL1 ? +0.11 : -0.11);
   var t_room = L1TempEstimator.get();
-  if (_L1supply > sensors.L1_floor.temp+1 || sensors.stove.temp > 55 || overheat) {
+  if (_L1supply > sensors.L1_floor.temp+1 || sensors.stove.temp > 55) {
 
     if (t_room < target || (state.heatL1 && t_room < target+0.1) || overheat) {
       //if (!relays.L1_pump.get()) console.log('L1 on', target, t_room, sensors.L1_floor.temp)
-      var t_delta = overheat ? 2 : (target-t_room);
+      var t_delta = overheat ? overtemp : (target-t_room);
       L1Heating.set(1, t_delta);
       state.heatL1 = true;
     } else {
@@ -435,7 +456,12 @@ var controller = function() {
   var app = this;
 
   netUpdate = doNetUpdate(app.service('state'));
-  const logger = require('./logger')(app.service('logs'));
+  
+  // enable logger to store temperature logs to mongodb
+  //const logger = require('./logger')(app.service('logs'));
+  const logger = null;
+  
+  
 
   function process() {
 
@@ -447,7 +473,8 @@ var controller = function() {
         refresh()
         relays._blink_all();
         //console.log({temps});
-        logger.put(state,temps);
+        if (logger)
+          logger.put(state,temps);
       } catch (x) {
         console.log(x);
         console.log(x.stack);
@@ -466,7 +493,8 @@ var controller = function() {
   .then( temps => {
     L1TempEstimator.init();
     console.log('initialized (T='+L1TempEstimator.get().toFixed(2)+')');
-    logger.init(state,temps);
+    if (logger)
+      logger.init(state,temps);
     process();
     return refresh()
   })

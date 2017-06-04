@@ -12,7 +12,12 @@ const LogCollector = (log_service) => {
   let state_acc = {};
   let state_old = {};
 
+  const round2 = (num) => // round number to 2 decimal digits
+    (typeof num === 'number')
+      ? +(Math.round(num + "e+2")  + "e-2")
+      : num;
 
+  // write into database
   const log_data = (timestamp, duration, temps_acc, state_acc, state_old) => {
     let rec = Object.assign({ts:timestamp,dur:duration,uptime:process.uptime()},state_old);
     Object.keys(state_acc).forEach( key => rec[key] = round2(state_acc[key] / duration * 1000));
@@ -20,12 +25,6 @@ const LogCollector = (log_service) => {
     //console.log(rec);
     log_service.create(rec);
   }
-
-  round2 = (num) =>
-    (typeof num === 'number')
-      ? +(Math.round(num + "e+2")  + "e-2")
-      : num;
-
 
   const reset = (state, temps, _timestamp) => {
     Object.keys(temps).forEach( key => temps_acc[key] = 0 );

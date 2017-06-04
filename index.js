@@ -5,6 +5,7 @@ const errors = require('feathers-errors');
 const rest = require('feathers-rest');
 const hooks = require('feathers-hooks');
 const socketio = require('feathers-socketio');
+const bodyParser = require('body-parser');
 const _ = require('lodash');
 
 const global_state = require('./state');
@@ -15,7 +16,6 @@ const controller = require('./controller');
 const auth = require('basic-auth');
 
 var app = feathers()
-
 /*
 credentials file should contain:
 module.exports = {
@@ -60,7 +60,7 @@ app.get('/', (req, res) => {
   }
 });
 
-
+// serve static files in development mode
 app.use((req, res, next) => {
   if (/.*\.js/.test(req.path)) {
     res.charset = "utf-8";
@@ -112,7 +112,7 @@ function state_service() {
 
       if (key === 'rf-temp') {
         //console.log('got rf:', data)
-        if (!data.channel || typeof data.temp != 'number')
+        if (!data.channel || typeof data.temp != 'number' || data.temp < -30 || data.temp > 60)
           return
         if (typeof data.updated == 'string') data.updated = Date.parse(data.updated);
         const report_key = ['L1report','L0report','L2report'][data.channel-1];
@@ -155,14 +155,17 @@ function state_service() {
 var MongoClient = require('mongodb').MongoClient;
 var mongodb = require('feathers-mongodb');
 
-MongoClient
-.connect('mongodb://localhost:27017/hvac')
-.then(db => {
+//MongoClient
+//.connect('mongodb://localhost:27017/hvac')
+//.then(db => {
   app
     .configure(rest())
+    .use(bodyParser.json())
+    .use(bodyParser.urlencoded({ extended: true }))
     .configure(hooks())
     .configure(socketio())
     .configure(state_service)
+/*    
     .use('logs', mongodb({
       Model: db.collection('logs'),
       paginate: {
@@ -170,8 +173,9 @@ MongoClient
         max: 500
       }
     }))
+*/    
     .configure(controller)
     .listen(8080, function(){
       console.log('listening on *:8080');
     })
-});
+//});
